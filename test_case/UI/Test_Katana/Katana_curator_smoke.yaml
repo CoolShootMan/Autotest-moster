@@ -1,0 +1,196 @@
+testA:
+  descrption: "验证搜索及add产品成功(T845/T1156)"
+  test_step: { "open": "https://release.pear.us/marketplace",
+               "R_click1": { "role": 'textbox', "name":'', "index":''},
+               "sleep1": 1000,
+               "fill": {"role": 'textbox', "value": 'NIKE'},
+               "press": {"role": 'textbox', "key": 'Enter'},
+               "sleep2": 3000,
+               "R_click2": { "role": 'button', "name":'Add to shop', "index":'0'},
+              }
+  expect_result: {  "descrption": "期望添加产品成功的弹窗文案是'Find in my shop'",
+                    #"role": 'button',
+                    #"selector": "#root > div",
+                    "role": "alert",
+                    "value": "",
+                    "visible": Ture,
+                    "attribute": {"name": "role", "value": "alert"} # 期望的属性值
+                  }
+
+#testB:
+#    descrption: "验证Products定位以及PDP转售(T839/T843)"
+#    test_step: { "open": "https://release.pear.us/marketplace",
+#                 "swipe1": [ 0 , 900 ],
+#                 "sleep1": 1500,
+#                 "R_click1": { "role": 'img', "name": '', "index":'23' },
+#                 "sleep2": 1500,
+#                 "L_click1": {"text": 'Back', "index":''},
+#                 "sleep3": 1500,
+#                 "R_click2": { "role": 'button', "name": 'Add to shop', "index":'0' },
+#                 "sleep4": 3000
+#    }
+#    expect_result: {  "descrption": "期望添加产品成功的弹窗文案是'Added to your shopShare it now'",
+#                      #"role": 'button',
+#                      #"selector": "#root > div",
+#                      "role": "alert",
+#                      "index":'0',
+#                      "value": "Added to your shopShare it now",
+#                      "visible": Ture,
+#                      "attribute": {"name": "role", "value": "alert"} # 期望的属性值
+#                    }
+
+#testC:
+#    descrption: "验证filter以及buy sample流向(T1126/T1188)"
+#    test_step: { "open": "https://release.pear.us/merchant/46fabbb4-f37e-4ce2-9bc9-0e9000572441?inviteCode=cxsl6",
+#                 "sleep1": 1500,
+#                 "swipe": [ 0 , 300 ],
+#                 "R_click1": { "role": 'button', "name": 'Shopify staging merchant-demi', "index":'0'},
+#                 "sleep2": 1000,
+#                 "R_click2": { "role": 'button', "name": 'Clear all', "index":''},
+#                 "sleep3": 1000,
+#                 "R_click3": { "role": 'button', "name": 'Done', "index":''},
+#                 "sleep4": 1500,
+#                 "R_click4": { "role": 'img', "name": '', "index":'23' },
+#                 "sleep5": 1500,
+#                 "R_click5": { "role": 'button', "name": 'Add to cart', "index":''},
+#                 "sleep6": 1000,
+#                 "R_click6": { "role": 'button', "name": 'View', "index":''},
+#                 "R_click7": { "role": 'button', "name": 'Checkout', "index":''},
+#                 "L_click1": {"text": 'MasterCard x5454Exp. 5/', "index":''},
+#                 "R_click8": { "role": 'button', "name": 'Submit order', "index":''},
+#                 "sleep7": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'Thank you for your order!",
+#      #"role": 'button',
+#      #"selector": "#root > div",
+#                     "role": "button",
+#                     "value": "Continue curating",
+#                     "visible": Ture,
+#                     "attribute": { "name": "role", "value": "button" } # 期望的属性值
+#    }
+
+#testD:
+#    descrption: "验证Collection购买flow以及Payouts页面跳转(T1260/T1278/T1280/T1281)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
+#
+#testE:
+#    descrption: "验证在merchants catalog页转售fetured产品(T846/T1154)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
+#
+#testF:
+#    descrption: "验证product管理操作-Pin to top以及Consumer POV(T1159/T1148/T1149/T1151/T1154)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
+#
+#testG:
+#    descrption: "验证product管理操作-Add photos以及PDP分享Link(T1047/T842)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
+#
+#testH:
+#    descrption: "验证旧Curator使用invitation link(T1143/T1264)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
+#
+#testI:
+#    descrption: "验证验证product管理操作-Remove from my shop以及Collection相关操作(T859/T1241/T1258/T1256)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
+#
+#testJ:
+#    descrption: "验证新Curator flow(T1263/T852)"
+#    test_step: { "open": "https://staging.pear.us/products",
+#                 "swipe1": [ 0 , 300 ],
+#                 "swipe2": [ 0 , -300 ],
+#                 "click1": { "role": 'textbox', "name": '' },
+#                 "sleep1": 1000,
+#                 "fill": { "role": 'textbox', "value": 'Order' },
+#                 "press": { "role": 'textbox', "key": 'Enter' },
+#                 "sleep2": 3000,
+#                 "click2": { "role": 'button', "name": 'Add to shop' },
+#                 "sleep3": 3000
+#    }
+#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
+#                     "text": "View",
+#                     "value": "View"
+#    }
