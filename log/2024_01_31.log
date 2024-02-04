@@ -1,0 +1,72 @@
+2024-01-31 18:36:47.740 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-31 18:36:49.159 | INFO     | tools:allure_title:100 - title:testC
+2024-01-31 18:36:49.159 | INFO     | tools:allure_step_no:124 - step:descrption:验证filter以及buy sample流向(T1126/T1188)
+2024-01-31 18:36:49.160 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://release.pear.us/merchant/46fabbb4-f37e-4ce2-9bc9-0e9000572441?inviteCode=cxsl6', 'sleep1': 1500, 'swipe': [0, 300], 'R_click1': {'role': 'button', 'name': 'Shopify staging merchant-demi', 'index': '0'}, 'sleep2': 1000, 'R_click2': {'role': 'button', 'name': 'Clear all', 'index': ''}, 'sleep3': 1000, 'R_click3': {'role': 'button', 'name': 'Done', 'index': ''}, 'sleep4': 1500, 'R_click4': {'role': 'img', 'name': '', 'index': '23'}, 'sleep5': 1500, 'R_click5': {'role': 'button', 'name': 'Add to cart', 'index': ''}, 'sleep6': 1000, 'R_click6': {'role': 'button', 'name': 'View', 'index': ''}, 'R_click7': {'role': 'button', 'name': 'Checkout', 'index': ''}, 'L_click1': {'text': 'MasterCard x5454Exp. 5/', 'index': ''}, 'R_click8': {'role': 'button', 'name': 'Submit order', 'index': ''}, 'sleep7': 3000}
+2024-01-31 18:36:49.160 | INFO     | page.home:page_open:76 - 打开-https://release.pear.us/merchant/46fabbb4-f37e-4ce2-9bc9-0e9000572441?inviteCode=cxsl6
+2024-01-31 18:37:18.657 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 300)
+2024-01-31 18:37:19.677 | INFO     | page.home:page_element_role_click:30 - 点击了元素-button,出现文本-Shopify staging merchant-demi
+2024-01-31 18:40:59.546 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-31 18:41:00.639 | INFO     | tools:allure_title:100 - title:testA
+2024-01-31 18:41:00.639 | INFO     | tools:allure_step_no:124 - step:descrption:验证搜索及add产品成功(T845/T1156)
+2024-01-31 18:41:00.639 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://release.pear.us/products', 'R_click1': {'role': 'textbox', 'name': '', 'index': ''}, 'sleep1': 1000, 'fill': {'role': 'textbox', 'value': 'NIKE'}, 'press': {'role': 'textbox', 'key': 'Enter'}, 'sleep2': 3000, 'R_click2': {'role': 'button', 'name': 'Add to shop', 'index': '0'}, 'sleep3': 3000}
+2024-01-31 18:41:00.639 | INFO     | page.home:page_open:76 - 打开-https://release.pear.us/products
+2024-01-31 18:41:20.410 | INFO     | page.home:page_element_role_click:30 - 点击了元素-textbox,出现文本-
+2024-01-31 18:41:23.509 | INFO     | page.home:page_element_input_role_fill:50 - 元素-textbox,填充文本-NIKE
+2024-01-31 18:41:24.571 | INFO     | page.home:page_element_input_role_press:70 - 对元素使用了按键-textbox
+2024-01-31 18:41:29.634 | INFO     | page.home:page_element_role_click:30 - 点击了元素-button,出现文本-Add to shop
+2024-01-31 18:41:34.732 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopView', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
+2024-01-31 18:41:39.753 | INFO     | tools:allure_title:100 - title:testB
+2024-01-31 18:41:39.753 | INFO     | tools:allure_step_no:124 - step:descrption:验证Products定位以及PDP转售(T839/T843)
+2024-01-31 18:41:39.753 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://release.pear.us/products', 'swipe1': [0, 900], 'sleep1': 1500, 'R_click1': {'role': 'img', 'name': '', 'index': '23'}, 'sleep2': 1500, 'L_click1': {'text': 'Back', 'index': ''}, 'sleep3': 1500, 'R_click2': {'role': 'button', 'name': 'Add to shop', 'index': '3'}, 'sleep4': 3000}
+2024-01-31 18:41:39.754 | INFO     | page.home:page_open:76 - 打开-https://release.pear.us/products
+2024-01-31 18:41:56.325 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 900)
+2024-01-31 18:41:59.860 | INFO     | page.home:page_element_role_click:30 - 点击了元素-img,出现文本-
+2024-01-31 18:42:03.448 | INFO     | page.home:page_element_label_click:38 - 点击了元素-Back
+2024-01-31 18:42:07.051 | INFO     | page.home:page_element_role_click:30 - 点击了元素-button,出现文本-Add to shop
+2024-01-31 18:42:12.122 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopView', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
+2024-01-31 19:14:26.527 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-31 19:14:27.622 | INFO     | tools:allure_title:100 - title:testA
+2024-01-31 19:14:27.622 | INFO     | tools:allure_step_no:124 - step:descrption:验证搜索及add产品成功(T845/T1156)
+2024-01-31 19:14:27.622 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://release.pear.us/products', 'R_click1': {'role': 'textbox', 'name': '', 'index': ''}, 'sleep1': 1000, 'fill': {'role': 'textbox', 'value': 'NIKE'}, 'press': {'role': 'textbox', 'key': 'Enter'}, 'sleep2': 3000, 'R_click2': {'role': 'button', 'name': 'Add to shop', 'index': '0'}, 'sleep3': 3000}
+2024-01-31 19:14:27.623 | INFO     | page.home:page_open:76 - 打开-https://release.pear.us/products
+2024-01-31 19:14:34.859 | INFO     | page.home:page_element_role_click:30 - 点击了元素-textbox,出现文本-
+2024-01-31 19:14:37.963 | INFO     | page.home:page_element_input_role_fill:50 - 元素-textbox,填充文本-NIKE
+2024-01-31 19:14:39.003 | INFO     | page.home:page_element_input_role_press:70 - 对元素使用了按键-textbox
+2024-01-31 19:14:44.063 | INFO     | page.home:page_element_role_click:30 - 点击了元素-button,出现文本-Add to shop
+2024-01-31 19:14:49.161 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shopShare it now'", 'role': 'alert', 'value': 'Added to your shopShare it now', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
+2024-01-31 19:14:49.207 | INFO     | tools:allure_title:100 - title:testB
+2024-01-31 19:14:49.207 | INFO     | tools:allure_step_no:124 - step:descrption:验证Products定位以及PDP转售(T839/T843)
+2024-01-31 19:14:49.207 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://release.pear.us/products', 'swipe1': [0, 900], 'sleep1': 1500, 'R_click1': {'role': 'img', 'name': '', 'index': '23'}, 'sleep2': 1500, 'L_click1': {'text': 'Back', 'index': ''}, 'sleep3': 1500, 'R_click2': {'role': 'button', 'name': 'Add to shop', 'index': '3'}, 'sleep4': 3000}
+2024-01-31 19:14:49.207 | INFO     | page.home:page_open:76 - 打开-https://release.pear.us/products
+2024-01-31 19:15:06.284 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 900)
+2024-01-31 19:15:09.822 | INFO     | page.home:page_element_role_click:30 - 点击了元素-img,出现文本-
+2024-01-31 19:15:13.406 | INFO     | page.home:page_element_label_click:38 - 点击了元素-Back
+2024-01-31 19:15:17.031 | INFO     | page.home:page_element_role_click:30 - 点击了元素-button,出现文本-Add to shop
+2024-01-31 19:15:22.213 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopShare it now', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}

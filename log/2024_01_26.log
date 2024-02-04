@@ -1,0 +1,142 @@
+2024-01-26 12:45:40.470 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 12:46:05.387 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 12:46:06.416 | INFO     | tools:allure_title:100 - title:testB
+2024-01-26 12:46:06.416 | INFO     | tools:allure_step_no:124 - step:descrption:验证Products定位以及PDP转售(T839/T843)
+2024-01-26 12:46:06.416 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://staging.pear.us/products', 'swipe1': [0, 900], 'sleep1': 1500, 'R_click1': {'role': 'img', 'name': '', 'index': '13'}, 'sleep2': 1500, 'l_click1': {'text': 'Back'}, 'sleep3': 1500, 'R_lick2': {'role': 'button', 'name': 'Add to shop', 'index': '20'}, 'sleep4': 3000}
+2024-01-26 12:46:06.417 | INFO     | page.home:page_open:76 - 打开-https://staging.pear.us/products
+2024-01-26 12:46:19.668 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 900)
+2024-01-26 12:46:23.226 | INFO     | page.home:page_element_role_click:30 - 点击了元素-img,出现文本-
+2024-01-26 12:46:26.847 | INFO     | page.home:page_element_label_click:38 - 点击了元素-Back
+2024-01-26 12:46:35.539 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopView', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
+2024-01-26 12:50:11.394 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 12:51:23.754 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:37:34.013 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:38:36.184 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:38:37.246 | INFO     | tools:allure_title:100 - title:testB
+2024-01-26 14:38:37.247 | INFO     | tools:allure_step_no:124 - step:descrption:验证Products定位以及PDP转售(T839/T843)
+2024-01-26 14:38:37.247 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://staging.pear.us/products', 'swipe1': [0, 900], 'sleep1': 1500, 'R_click1': {'role': 'img', 'name': '', 'index': '13'}, 'sleep2': 1500, 'l_click1': {'text': 'Back'}, 'sleep3': 1500, 'R_lick2': {'role': 'button', 'name': 'Add to shop', 'index': '20'}, 'sleep4': 3000}
+2024-01-26 14:38:37.247 | INFO     | page.home:page_open:76 - 打开-https://staging.pear.us/products
+2024-01-26 14:39:00.047 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 900)
+2024-01-26 14:39:03.607 | INFO     | page.home:page_element_role_click:30 - 点击了元素-img,出现文本-
+2024-01-26 14:39:07.218 | INFO     | page.home:page_element_label_click:38 - 点击了元素-Back
+2024-01-26 14:39:15.913 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopView', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
+2024-01-26 14:39:56.174 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:42:58.718 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:44:58.521 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:49:31.335 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 14:49:32.367 | INFO     | tools:allure_title:100 - title:testB
+2024-01-26 14:49:32.367 | INFO     | tools:allure_step_no:124 - step:descrption:验证Products定位以及PDP转售(T839/T843)
+2024-01-26 14:49:32.367 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://staging.pear.us/products', 'swipe1': [0, 900], 'sleep1': 1500, 'R_click1': {'role': 'img', 'name': '', 'index': '13'}, 'sleep2': 1500, 'l_click1': {'text': 'Back'}, 'sleep3': 1500, 'R_lick2': {'role': 'button', 'name': 'Add to shop', 'index': '20'}, 'sleep4': 3000}
+2024-01-26 14:49:32.367 | INFO     | page.home:page_open:76 - 打开-https://staging.pear.us/products
+2024-01-26 14:49:46.931 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 900)
+2024-01-26 14:49:50.486 | INFO     | page.home:page_element_role_click:30 - 点击了元素-img,出现文本-
+2024-01-26 14:49:54.107 | INFO     | page.home:page_element_label_click:38 - 点击了元素-Back
+2024-01-26 14:50:02.787 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopView', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
+2024-01-26 15:22:25.685 | INFO     | __main__:start_autotest:22 - 
+
+     _   _   _ _____ ___    _____ _____ ____ _____ 
+    / \ | | | |_   _/ _ \  |_   _| ____/ ___|_   _|
+   / _ \| | | | | || | | |   | | |  _| \___ \ | |  
+  / ___ \ |_| | | || |_| |   | | | |___ ___) || |  
+ /_/   \_\___/  |_| \___/    |_| |_____|____/ |_|  
+"`-0-0-'"`-0-0-'"`-0-0-'"`-0-0-'./o--000'"`-0-0-'"
+
+      Starting      ...     ...     ...
+2024-01-26 15:22:26.980 | INFO     | tools:allure_title:100 - title:testB
+2024-01-26 15:22:26.980 | INFO     | tools:allure_step_no:124 - step:descrption:验证Products定位以及PDP转售(T839/T843)
+2024-01-26 15:22:26.981 | INFO     | tools:allure_step_no:124 - step:test_step:{'open': 'https://staging.pear.us/products', 'swipe1': [0, 900], 'sleep1': 1500, 'R_click1': {'role': 'img', 'name': '', 'index': '13'}, 'sleep2': 1500, 'l_click1': {'text': 'Back'}, 'sleep3': 1500, 'R_lick2': {'role': 'button', 'name': 'Add to shop', 'index': '20'}, 'sleep4': 3000}
+2024-01-26 15:22:26.981 | INFO     | page.home:page_open:76 - 打开-https://staging.pear.us/products
+2024-01-26 15:22:41.723 | INFO     | page.home:page_swipe:64 - 滑动元素,坐标-(0, 900)
+2024-01-26 15:22:45.284 | INFO     | page.home:page_element_role_click:30 - 点击了元素-img,出现文本-
+2024-01-26 15:22:48.899 | INFO     | page.home:page_element_label_click:38 - 点击了元素-Back
+2024-01-26 15:22:57.566 | INFO     | tools:allure_step_no:124 - step:expect_result:{'descrption': "期望添加产品成功的弹窗文案是'Added to your shop'和'View'", 'role': 'alert', 'value': 'Added to your shopView', 'visible': 'Ture', 'attribute': {'name': 'role', 'value': 'alert'}}
