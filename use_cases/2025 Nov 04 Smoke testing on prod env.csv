@@ -1,0 +1,120 @@
+ID,一级模块,二级模块,三级模块,四级模块,五级模块,所属用例库,用例名称,优先级,前置条件,步骤描述,预期结果
+T3911,Explore,Consumer View,,,,Katana,Verify the order details page of the ticket event and mark the redemption status of the tickets,P0,"1. Merchant create a post, add a ticket product to post, publish
+2. Consumer visit the post, add ticket product to cart, checkout, place order","1. 1. Click view order details button on order confirmation page
+2. 2. Merchant click the click ""Mark as redeemed"", and then click ""Mark as Redeemed""
+3. 3. The ticket inspectors scanned this ticket.
+-
+-
+The merchant enters the ""catalogs"" section, selects the product, and views the data in the ""Orders"" tab.
+4. 4. Merchant click the ""Mark as unredeemed"", and then click ""Mark as Not Redeemed"" -
+Merchant checks Sale details
+5. 5. The consumer has made a refund, and the merchant is checking the status of the ticket redemption.","1. 1. After opening the ""Sale Details"" page, the following information is displayed under ""Item Info"": [Ticket number]
+Not redeemed
+[CTA]Mark as redeemed
+2. 2. After clicking ""Mark as redeemed"", a pop-up window appeared: Mark item as Redeemed?
+Confirm you want to mark this item as redeemed.
+[CTA]Mark as Redeemed
+-
+The merchant successfully marked the ticket as ""Redeemed"".
+3. 3. Write-off failed, displayed:
+
+Code Already Redeemed
+[Order ID]
+[Ticket number]
+[Ticket  cover]
+[Ticket  title] [Price x Qty]
+Redeemed
+[Redeemed date]
+[CTA]Scan next ticket
+-
+The merchant entered the ""Orders"" tab. The status of this order is: ""1 of 1 Redeemed"".
+4. 4. After clicking ""Mark as unredeemed"", a pop-up window appeared:
+Mark item as Not Redeemed?
+Confirm you want to mark this item as not redeemed.
+[CTA]Mark as Not Redeemed
+-
+The merchant successfully marked the ticket as ""Not Redeemed"".
+5. 5. The tickets have already been refunded and cannot be marked."
+T1962,Explore,Curator/Promoter View,Home,Post card,,Katana,Verify the "Add to shop" flow is correct,P0,,"1. A curator creates a post and add products, open the ""Post setting"" and set the differ commission to promoters
+2. Open the ""Allow promoters to customize this post by making only their chosen products visible
+""
+3. publish the post and check the post is display on the associated promoter's sell page
+4. Click ""Add to shop"", check the post can be edit
+5. After edit the post after ""Publish"", check the button display, and check the commission and ""Earn up to "" is correct
+6. Check if the post contains ""Subscribe & Save"" plan, this section is locked and unable to edit","1. 
+2. 
+3. 
+4. the post can be edit
+5. the button display ""find in shop"" and share to earn
+the commission and ""earn up to"" is display correct on the Sell page / post detail page/ My shop post card / My shop post detail page
+6. ""Subscribe & Save"" plan is locked when promoter ""Edit & Promote"""
+T3980,My Shop,Storefront,Posts,Post card,Others,Katana,Verify that only the original post can generate the scan link,P0,"The merchant created a ticket product and set up a post, and the promoter resold this post","1. 1. The merchant clicks ""..."" on the post card Then click ""Create scan link""
+2. 2. promoter clicks ""..."" on the post card","1. 1. The merchant successfully created a san link
+2. 2. The promoter cannot be in ""..."" See the ""Create scan link"" button"
+T2129,My Shop,Storefront,Products,Create a post,,Katana,Verify the Product card can create post success on my shop page,P0,,"1. Go to My shop > Products tab, select one product and create post
+2. open the price settings and “Allow promoters to set the retail price in their resale post.“
+
+
+3. Check the catalog retail price and wholesale price
+4. publish the post
+5. Click the tooltip ""View in my shop""","1. 
+2. 
+3. 3.1 wholesale price display: catalog price * (1- commission) 
+ 3.2 retail price default display the same with catalog price
+4. post publish succeed
+5. Page jump to ""Post"" tab"
+T1065,My Shop,Storefront,Edit Profile,Socials,,Katana,"Verify that Curator edits all Social links and changes the location of the links, and then checks the location of the shop icon",P0,,"1. 1.Curator enters My shop and click the ""Customize"".
+2.  2. Click “Social” and edit all third-party platforms and email addresses to enter new content, then drag the header of the second link to swap positions with the third link 
+3. 3 .Click the Save button","1. Curator successfully updated all external links and changed the position of the second and third platform icons on the shop page
+2. 
+3."
+T855,My Shop,Storefront,Edit Profile,Customize shop,,Katana,Curator successfully copies the store link in "My Shop" and opens it,P0,Successfully entered My Shop,"1. 1. Curator exist My Shop click the ""Share"" button next to the store Socials
+2. Paste and open in browser","1. Successfully jumped to the shop page
+If it is a new user, the follow page will be displayed first; otherwise, it will directly enter the shop page"
+T1059,My Shop,Storefront,Edit Profile,Customize shop,,Katana,Curator successfully customized store details,P0,,"1. 1. Curator into My shop
+
+2. Click the Customize shop edit button
+
+3. Enter the correct store name, store description, upload avatar
+
+4. Click the Save button
+
+5. Click ""Confirm"" button
+2. 6. Edit profile, and enter a combination of lowercase letters, numbers and hyphens in the store address and click ""Save""","1. Curator successfully customized the store information
+2. Saved successfully, the store URL is a combination of lowercase letters, numbers, and hyphens"
+T2716,My Shop,Storefront,Edit Profile,Customize shop,,Katana,"If the profile does not have an image, then a default pear image should be required",P0,,"1. A new account accepts the Curator's invitation
+
+
+2. Log in to pear
+
+
+3. View my shop profile picture","1. 
+2. 
+3. If the profile does not have an image, then a default pear image should be required"
+T853,My Shop,Storefront,Edit Profile,Customize shop,,Katana,Verify that the Curator has successfully changed personal information and that the store link will be updated,P0,Successfully entered My Shop,"1. 1. Curator rexist My ShopIf the page already has data, click the avatar to upload a new picture, and click name enter ""New tester""
+2. Refresh the entire page, then check to see if the new avatar, new name, and store link change","1. Successfully, the administrator changed the avatar and name in ""my shop"", the store link did not change"
+T3556,My Shop,Storefront,Edit Profile,Storefront,,Katana,Verify modifying a module in Customize shop-Content,P0,"A module""test1"" has been added to the shop page, and there are 6 posts below","1. 1. Click ""my shop-Customize""
+2. 2. Select ""Content "", click the editing button on the right side of module"" test1 "", enter the title ""Test1-2 "", then select"" Carousel ""for Layout style, select ""Products"" for Content to add, and finally click"" Add "".
+3. 3. Delete 2 posts, then click ""Add from my posts"", Select 1 post in ""Select from my posts"", and then click"" Add "".
+4. 4. Return to the shop page to view the new module, then share the store link and open it, and use Guest POV to view the new module of the shop","1. 1. Enter the Customize shop page, where there are only three modules: ""Storefront"", ""Content"", and ""Colors"".
+2. 2. Successfully edit the module""test1"", change the title to ""Test1-2"", then change the Layout style to ""Carousel"", and the Content to add is disabled, so it is still ""Posts"".
+3. 3. Successfully deleted two posts for the module ""test1-2"" and added one new post
+4. 4. Curator POV and guest POV both saw the ""test1-2""module in the shop with 5 posts, displayed horizontally"
+T4279,My Shop,Storefront,Edit Profile,Storefront,Contact us form,Katana,Verify user can complete and submit the “Contact us” form successfully,P0,Merchant has published the form,"1. 1. User visits the shop page and clicks the “Contact us” entry
+2. 2. Fill in all required fields and click Submit
+3. 3. System processes the submission
+4. 4. Merchant checks their email inbox","1. 1. Page navigates to the form page, showing configured fields
+2. 2. User inputs information and clicks Submit
+3. 3. Page displays “Submission successful” or similar confirmation
+4. 4. Merchant’s email inbox receives a message containing the user’s submitted information"
+T1993,My Shop,My Collabs,End to end,,,Katana,Verify the function of generating invitation link,P0,The user is on the My Promoters or My Curators page,1. Click the "Invite more promoters\curatos" button; The Catalog role selects a catalog in Select a catalog and generates an invite link,1. An invite link should be generated with the option to copy or share
+T1747,+,Create a Post,,,,Katana,Verify whether clicking the "Save as draft" button in the lower left corner of the Create Post page can save it as a draft Post,P0,The "Set promoter commission" page has been opened,"1. 1.MC enters Create Post 
+2. Fill in the required fields 
+3. Click the ""Save as draft"" button 
+4. Click the ""View in My Shop"" button",1. Successfully created a draft Post and jumped to the My shop page
+T1281,Account,Earnings & Payout,,,,Katana,Verify Payout tab visibility,P0,The user is logged in and is on the Earnings page.,1. Check if the Payout tab is visible and accessible.,"1. The ""Payout"" TAB should be visible and accessible, showing ""No payout yet"" if there is no transfer information, Show the transfer card if there is transfer information and explanation text""It takes 3-5 business days for each transaction to post to your bank account."""
+T1864,Account,Earnings & Payout,,,,Katana,"Verify when clicking the order number on the Earning/Your Product Revenue page, the order URL jump Sales detail page",P0,,"1. Go to Account > Earnings & Payout
+2. click the order number on the Total commissions 
+3. click the order number on the ""Total  Revenue"" page","1. 
+2. it will turn to the Sales details page,, and display the earnings 
+3. it will turn to the Sale details page and can fulfill the order on this page"

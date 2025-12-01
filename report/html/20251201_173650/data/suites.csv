@@ -1,0 +1,8 @@
+"Status","Start Time","Stop Time","Duration in ms","Parent Suite","Suite","Sub Suite","Test Class","Test Method","Name","Description"
+"passed","Mon Dec 01 17:39:42 CST 2025","Mon Dec 01 17:40:04 CST 2025","21872","test_case.UI.Test_Katana","test_ui","","","","testT4279",""
+"failed","Mon Dec 01 17:36:52 CST 2025","Mon Dec 01 17:37:38 CST 2025","45903","test_case.UI.Test_Katana","test_ui","","","","testT3370",""
+"passed","Mon Dec 01 17:37:38 CST 2025","Mon Dec 01 17:38:09 CST 2025","31067","test_case.UI.Test_Katana","test_ui","","","","testT3554",""
+"passed","Mon Dec 01 17:38:53 CST 2025","Mon Dec 01 17:38:59 CST 2025","6824","test_case.UI.Test_Katana","test_ui","","","","testT1993",""
+"passed","Mon Dec 01 17:38:09 CST 2025","Mon Dec 01 17:38:53 CST 2025","43655","test_case.UI.Test_Katana","test_ui","","","","testT4264",""
+"passed","Mon Dec 01 17:38:59 CST 2025","Mon Dec 01 17:39:14 CST 2025","14310","test_case.UI.Test_Katana","test_ui","","","","testT855",""
+"passed","Mon Dec 01 17:39:14 CST 2025","Mon Dec 01 17:39:42 CST 2025","28413","test_case.UI.Test_Katana","test_ui","","","","testT1747",""

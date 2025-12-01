@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 @File    :   encode.py
-Time             : 2023/12/29 10:29:01
-Author           : Xiao
-Version          : 1.0
+@Time    :   2022/01/15 19:52:58
+@Author  :   AllenLuo
+@Version :   1.0
 @Contact :   username@163.com
 @Desc    :   None
 """

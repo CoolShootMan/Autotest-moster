@@ -1,10 +1,10 @@
 #!usr/bin/env python3
 # -*- encoding: utf-8 -*-
 '''
-Filename         : home.py
-Description      :
-Time             : 2023/12/29 10:29:01
-Author           : Xiao
+Filename         : email_send.py
+Description      : 
+Time             : 2022/02/22 16:55:53
+Author           : AllenLuo
 Version          : 1.0
 '''
 import smtplib

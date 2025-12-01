@@ -3,8 +3,8 @@
 '''
 Filename         : generate_data.py
 Description      : 生成随机数据
-Time             : 2023/12/29 10:29:01
-Author           : Xiao
+Time             : 2022/03/07 17:44:34
+Author           : AllenLuo
 Version          : 1.0
 '''
 

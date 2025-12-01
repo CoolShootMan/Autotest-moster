@@ -1,0 +1,1 @@
+{"0381e3b7529e4382bf5d576bab718e8d":{"statistic":{"failed":0,"broken":1,"skipped":0,"passed":0,"unknown":0,"total":1},"items":[{"uid":"4a502aad48a84f3f","status":"broken","statusDetails":"TypeError: allure_step() missing 1 required positional argument: 'var'","time":{"start":1762482326502,"stop":1762482338994,"duration":12492}}]}}

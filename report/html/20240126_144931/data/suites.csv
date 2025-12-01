@@ -1,0 +1,2 @@
+"Status","Start Time","Stop Time","Duration in ms","Parent Suite","Suite","Sub Suite","Test Class","Test Method","Name","Description"
+"failed","Fri Jan 26 14:49:32 CST 2024","Fri Jan 26 14:50:07 CST 2024","35444","test_case.UI.Test_Katana","test_ui","","","","testB",""

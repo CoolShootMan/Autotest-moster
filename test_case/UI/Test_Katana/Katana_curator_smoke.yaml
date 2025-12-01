@@ -1,196 +1,196 @@
-testA:
-  descrption: "验证搜索及add产品成功(T845/T1156)"
-  test_step: { "open": "https://release.pear.us/marketplace",
-               "R_click1": { "role": 'textbox', "name":'', "index":''},
-               "sleep1": 1000,
-               "fill": {"role": 'textbox', "value": 'NIKE'},
-               "press": {"role": 'textbox', "key": 'Enter'},
-               "sleep2": 3000,
-               "R_click2": { "role": 'button', "name":'Add to shop', "index":'0'},
-              }
-  expect_result: {  "descrption": "期望添加产品成功的弹窗文案是'Find in my shop'",
-                    #"role": 'button',
-                    #"selector": "#root > div",
-                    "role": "alert",
-                    "value": "",
-                    "visible": Ture,
-                    "attribute": {"name": "role", "value": "alert"} # 期望的属性值
-                  }
+testT3370:
+    description: "Verify set the product card alignment at the store level"
+    test_step:
+        open: "https://release.pear.us/yu-xiao"
+        # Step 2: Set Product card layout to Top aligned
+        goto_storefront_top_aligned:
+            url: "https://release.pear.us/storefront-modules#Storefront"
+            timeout: 90000
+        check_label_top_aligned:
+            label: "Top aligned"
+            timeout: 60000
+        publish_button_click_top_aligned: {}
+        verify_navigation_after_publish_top_aligned:
+            url_regex: "https://release.pear.us/yu-xiao"
+            timeout: 70000
+            warning_message: "Shop page redirect after publish timed out. Directly navigating to Shop page."
+            fallback_url: "https://release.pear.us/yu-xiao"
+            fallback_timeout: 90000
+        click_mui_svg_icon_top_aligned: {}
+        click_products_text_top_aligned: {}
+        wait_for_product_cards_top_aligned:
+            index: 1
+            timeout: 60000
+        verify_top_aligned_layout:
+            timeout: 60000
+            screenshot_path: "recordings/top_aligned_failure.png"
+            threshold: 5
+        # Step 4: Set Product card layout to Waterfall
+        goto_storefront_waterfall:
+            url: "https://release.pear.us/storefront-modules#Storefront"
+            timeout: 90000
+        check_label_waterfall:
+            label: "Waterfall"
+            timeout: 60000
+        publish_button_click_waterfall: {}
+        verify_navigation_after_publish_waterfall:
+            url_regex: "https://release.pear.us/yu-xiao"
+            timeout: 70000
+            warning_message: "Shop page redirect after publish timed out. Directly navigating to Shop page."
+            fallback_url: "https://release.pear.us/yu-xiao"
+            fallback_timeout: 90000
+        click_mui_svg_icon_waterfall: {}
+        click_products_text_waterfall: {}
+        wait_for_product_cards_waterfall:
+            index: 1
+            timeout: 60000
+        verify_waterfall_layout:
+            url_regex: "https://release.pear.us/yu-xiao"
+            timeout: 70000
+            warning_message: "Shop page redirect after publish timed out. Directly navigating to Shop page."
+            fallback_url: "https://release.pear.us/yu-xiao"
+            fallback_timeout: 90000
+            wait_for_timeout: 1500
+            wait_for_cards_timeout: 60000
+    expect_result:
+        description: "Product card alignment should be verified for both Top aligned and Waterfall layouts."
+        assertions:
+          - assertion_type: "top_aligned_layout"
+            selector: "div.MuiBox-root[data-index]"
+            threshold: 5
+          - assertion_type: "waterfall_layout"
+            selector: "div.MuiBox-root[data-index]"
 
-#testB:
-#    descrption: "验证Products定位以及PDP转售(T839/T843)"
-#    test_step: { "open": "https://release.pear.us/marketplace",
-#                 "swipe1": [ 0 , 900 ],
-#                 "sleep1": 1500,
-#                 "R_click1": { "role": 'img', "name": '', "index":'23' },
-#                 "sleep2": 1500,
-#                 "L_click1": {"text": 'Back', "index":''},
-#                 "sleep3": 1500,
-#                 "R_click2": { "role": 'button', "name": 'Add to shop', "index":'0' },
-#                 "sleep4": 3000
-#    }
-#    expect_result: {  "descrption": "期望添加产品成功的弹窗文案是'Added to your shopShare it now'",
-#                      #"role": 'button',
-#                      #"selector": "#root > div",
-#                      "role": "alert",
-#                      "index":'0',
-#                      "value": "Added to your shopShare it now",
-#                      "visible": Ture,
-#                      "attribute": {"name": "role", "value": "alert"} # 期望的属性值
-#                    }
+testT3554:
+    description: "Verify adding a new module in shop page"
+    test_step:
+        open: "https://release.pear.us/yu-xiao"
+        sleep_after_open: 5000
+        click_xpath1: { xpath: '.MuiButtonBase-root.MuiButton-root.MuiButton-outlined.MuiButton-outlinedPrimary.MuiButton-sizeMedium.MuiButton-outlinedSizeMedium.MuiButton-colorPrimary.katana-y72g0l >> nth=0' }
+        sleep_wait_menu: 1500
+        R_click3: { role: 'button', name: 'Add new module' }
+        fill1: { role: 'textbox', name: 'Enter title of the module', value: 'test new module' }
+        R_click4: { role: 'button', name: 'Add' }
+        sleep_wait_product: 5000
+        R_click5: { role: 'button', index: 1 }
+        sleep_wait_confirm: 2000
+        R_click7: { role: 'button', name: 'Add', index: -1 }
+        sleep_after_publish: 5000
+    expect_result:
+        description: "Verify that the new module is visible on the page"
+        assertions:
+          - assertion_type: "element_visible_by_text"
+            text: "test new module"
 
-#testC:
-#    descrption: "验证filter以及buy sample流向(T1126/T1188)"
-#    test_step: { "open": "https://release.pear.us/merchant/46fabbb4-f37e-4ce2-9bc9-0e9000572441?inviteCode=cxsl6",
-#                 "sleep1": 1500,
-#                 "swipe": [ 0 , 300 ],
-#                 "R_click1": { "role": 'button', "name": 'Shopify staging merchant-demi', "index":'0'},
-#                 "sleep2": 1000,
-#                 "R_click2": { "role": 'button', "name": 'Clear all', "index":''},
-#                 "sleep3": 1000,
-#                 "R_click3": { "role": 'button', "name": 'Done', "index":''},
-#                 "sleep4": 1500,
-#                 "R_click4": { "role": 'img', "name": '', "index":'23' },
-#                 "sleep5": 1500,
-#                 "R_click5": { "role": 'button', "name": 'Add to cart', "index":''},
-#                 "sleep6": 1000,
-#                 "R_click6": { "role": 'button', "name": 'View', "index":''},
-#                 "R_click7": { "role": 'button', "name": 'Checkout', "index":''},
-#                 "L_click1": {"text": 'MasterCard x5454Exp. 5/', "index":''},
-#                 "R_click8": { "role": 'button', "name": 'Submit order', "index":''},
-#                 "sleep7": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'Thank you for your order!",
-#      #"role": 'button',
-#      #"selector": "#root > div",
-#                     "role": "button",
-#                     "value": "Continue curating",
-#                     "visible": Ture,
-#                     "attribute": { "name": "role", "value": "button" } # 期望的属性值
-#    }
+testT4264:
+    description: "Verify that the user adds the link card of 'Image' on the shop page(navigation bar) and module menu"
+    test_step:
+        open: "https://release.pear.us/yu-xiao"
+        sleep_after_open: 5000
+        click_xpath1: { xpath: '.MuiButtonBase-root.MuiButton-root.MuiButton-outlined.MuiButton-outlinedPrimary.MuiButton-sizeMedium.MuiButton-outlinedSizeMedium.MuiButton-colorPrimary.katana-y72g0l >> nth=0' }
+        sleep_wait_menu: 1500
+        R_click3: { role: 'button', name: 'Add new module' }
+        check1: { role: 'radio', name: 'Links (select a type below)' }
+        l_click_regex1: { text: 'Image$', index: 1 }
+        check2: { role: 'radio', name: 'Carousel Carousel' }
+        sleep2: 5000
+        R_click4: { role: 'button', name: 'Add' }
+        R_click5: { role: 'button', name: 'Add new', index: -1 }
+        fill_by_placeholder_and_locator1: { placeholder: 'https://example.com', locator: 'input[name="url"]', value: 'www.baidu.com' }
+        fill2: { placeholder: 'As the bold title on your', value: 'test aotu image' }
+        upload1: { text: 'Upload', file_path: 'C:\Users\tester\gemini-autotest\data\test image.jpg' }
+        wait_for_upload_and_ui_update1: { timeout: 2000 }
+        R_click4: { role: 'button', name: 'Add' }
+        sleep_after_close: 3000
+    expect_result:
+        description: "Verify that the new image link card is visible on the page"
+        assertions:
+          - assertion_type: "element_visible_by_text"
+            text: "test aotu image"
 
-#testD:
-#    descrption: "验证Collection购买flow以及Payouts页面跳转(T1260/T1278/T1280/T1281)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
-#
-#testE:
-#    descrption: "验证在merchants catalog页转售fetured产品(T846/T1154)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
-#
-#testF:
-#    descrption: "验证product管理操作-Pin to top以及Consumer POV(T1159/T1148/T1149/T1151/T1154)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
-#
-#testG:
-#    descrption: "验证product管理操作-Add photos以及PDP分享Link(T1047/T842)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
-#
-#testH:
-#    descrption: "验证旧Curator使用invitation link(T1143/T1264)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
-#
-#testI:
-#    descrption: "验证验证product管理操作-Remove from my shop以及Collection相关操作(T859/T1241/T1258/T1256)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
-#
-#testJ:
-#    descrption: "验证新Curator flow(T1263/T852)"
-#    test_step: { "open": "https://staging.pear.us/products",
-#                 "swipe1": [ 0 , 300 ],
-#                 "swipe2": [ 0 , -300 ],
-#                 "click1": { "role": 'textbox', "name": '' },
-#                 "sleep1": 1000,
-#                 "fill": { "role": 'textbox', "value": 'Order' },
-#                 "press": { "role": 'textbox', "key": 'Enter' },
-#                 "sleep2": 3000,
-#                 "click2": { "role": 'button', "name": 'Add to shop' },
-#                 "sleep3": 3000
-#    }
-#    expect_result: { "descrption": "期望添加产品成功的弹窗文案是'View'",
-#                     "text": "View",
-#                     "value": "View"
-#    }
+testT1993:
+    description: "Verify the function of generating invitation link"
+    test_step:
+        open: "https://release.pear.us/collabs"
+        click_copy_button: {}
+        click_manage_button: {}
+        click_copy_outline_icon: {}
+    expect_result:
+        description: "An invite link should be generated with the option to copy or share"
+        assertions:
+          - assertion_type: "element_visible_by_text"
+            text: "Link copied"
+
+testT855:
+    description: "Verify the Share button functionality"
+    test_step:
+        open: "https://release.pear.us/yu-xiao"
+        sleep_after_open: 3000
+        R_click_share: { role: 'button', name: 'Share' }
+        sleep_after_click: 2000
+    expect_result:
+        description: "Share dialog or options should appear"
+        assertions:
+          - assertion_type: "element_visible"
+            selector: "[role='dialog']"
+
+
+testT1747:
+    description: "Verify creating a draft post"
+    test_step:
+        open: "https://release.pear.us/yu-xiao"
+        sleep_after_open: 3000
+        click_xpath_plus_button: { xpath: '//*[@id="root"]/section/div/div/div[2]/div[3]/div/div[3]/div' }
+        sleep_after_plus: 2000
+        R_click_create_post_link: { role: 'link', name: 'Create a Post' }
+        sleep_check_nav: 2000
+        screenshot_check_nav: { name: "check_nav_t1747.png" }
+        wait_for_url_create_post: { url: "https://release.pear.us/post/create?c=POST_PAGE", timeout: 5000 }
+        R_click_Close_button: { role: 'button', name: 'Close' }
+        sleep_after_close: 2000
+        R_click_content_tab: { role: 'tab', name: 'Content' }
+        sleep_after_tab: 1000
+        fill_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'Auto test darft post' }
+        fill_subtitle: { role: 'textbox', name: 'Enter a subtitle to enrich', value: 'Auto test' }
+        R_click_save_draft: { role: 'button', name: 'Save as draft' }
+        sleep_after_save: 3000
+    expect_result:
+        description: "Draft post should be saved successfully"
+        assertions:
+          - assertion_type: "element_visible_by_text"
+            text: "Post saved as draft!"
+
+testT4279:
+    guest: true
+    description: "Verify submitting the contact form"
+    test_step:
+        open: "https://release.pear.us/yu-xiao"
+        sleep_after_open: 2500
+        click_modal_close: {}
+        sleep_after_close_popup: 1500
+        click_contact_form:
+            text: "Auto test form"
+        sleep_after_click_form: 1500
+        fill_note:
+            name: "Note"
+            value: "test auto send"
+        fill_message:
+            name: "Message"
+            value: "test auto test auto test auto test auto test auto test auto test auto test auto test auto test auto test auto test auto "
+        fill_email:
+            role: "textbox"
+            name: "Enter your email address"
+            value: "yuxiao.zhu.ext@1m.app"
+        fill_phone:
+            role: "textbox"
+            name: "Phone number"
+            value: "+13018427082"
+        R_click_submit:
+            role: "button"
+            name: "Submit"
+        sleep_after_submit: 2000
+    expect_result:
+        description: "Form should be submitted successfully"
+        assertions:
+          - assertion_type: "element_visible_by_text"
+            text: "The form was submitted"

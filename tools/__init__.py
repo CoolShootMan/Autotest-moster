@@ -1,9 +1,10 @@
 #!usr/bin/env python3
+# -*- coding: cp1252 -*-
 # -*- encoding: utf-8 -*-
 '''
 Filename         :__init__.py
 Description      :
-Time             :2021/12/18 09:36:43
+Time             :2025/11/03 11:05:43
 Author           : Xiao
 Version          :1.0
 '''
@@ -55,7 +56,7 @@ def rep_expr(content: str, data: dict) -> str:
     """
     :param content: the origin character string
     :param data: 
-    return content： the character string that be replaced 
+    return content�� the character string that be replaced 
     """
     logger.info(f'content-{content}')
     content = Template(content).safe_substitute(data)

@@ -3,9 +3,9 @@
 '''
 Filename         :read_file.py
 Description      :
-Time             : 2023/12/29 10:29:01
-Author           : Xiao
-Version          : 1.0
+Time             :2021/12/18 09:37:22
+Author           : AllenLuo
+Version          :1.0
 '''
 
 import yaml

@@ -1,0 +1,36 @@
+import re
+from playwright.sync_api import Playwright, sync_playwright, expect
+
+
+def run(playwright: Playwright) -> None:
+    browser = playwright.chromium.launch(headless=False)
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto("https://release.pear.us/login")
+    page.get_by_text("Login with password").click()
+    page.get_by_role("textbox", name="Phone number").click()
+    page.get_by_role("textbox", name="Phone number").fill("4086257869")
+    page.get_by_role("textbox", name="Input your password").click()
+    page.get_by_role("textbox", name="Input your password").fill("Xuan123456")
+    page.get_by_role("button", name="Log in").click()
+    page.goto("https://release.pear.us/demi-release")
+    page.get_by_role("button", name="Customize").click()
+    page.get_by_role("tab", name="Modules").click()
+    page.get_by_role("button", name="Add new module").click()
+    page.get_by_role("textbox", name="Enter title of the module").click()
+    page.get_by_role("textbox", name="Enter title of the module").fill("test new module")
+    page.get_by_role("button", name="Add").click()
+    page.get_by_role("button", name="Image of Product test date zasq9n").click()
+    page.get_by_role("button", name="Image of Product test 7801").click()
+    page.get_by_role("button", name="Add").click()
+    page.get_by_role("button", name="Publish").click()
+    page.get_by_role("paragraph").filter(has_text="test new module").click()
+    page.get_by_role("paragraph").filter(has_text="test new module").click()
+
+    # ---------------------
+    context.close()
+    browser.close()
+
+
+with sync_playwright() as playwright:
+    run(playwright)

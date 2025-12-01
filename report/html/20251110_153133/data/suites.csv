@@ -1,0 +1,5 @@
+"Status","Start Time","Stop Time","Duration in ms","Parent Suite","Suite","Sub Suite","Test Class","Test Method","Name","Description"
+"broken","Mon Nov 10 15:34:33 CST 2025","Mon Nov 10 15:34:33 CST 2025","5","test_case.UI.Test_Katana","test_ui","","","","testT1993",""
+"broken","Mon Nov 10 15:31:35 CST 2025","Mon Nov 10 15:32:58 CST 2025","83934","test_case.UI.Test_Katana","test_ui","","","","testT3370",""
+"broken","Mon Nov 10 15:34:33 CST 2025","Mon Nov 10 15:34:33 CST 2025","245","test_case.UI.Test_Katana","test_ui","","","","testT4264",""
+"broken","Mon Nov 10 15:32:59 CST 2025","Mon Nov 10 15:34:33 CST 2025","94104","test_case.UI.Test_Katana","test_ui","","","","testT3554",""

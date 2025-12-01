@@ -3,8 +3,8 @@
 '''
 Filename         : sql_operate.py
 Description      : the sql operation file
-Time             : 2023/12/29 10:29:01
-Author           : Xiao
+Time             : 2022/01/02 12:55:52
+Author           : AllenLuo
 Version          : 1.0
 '''
 

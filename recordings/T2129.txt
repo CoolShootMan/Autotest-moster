@@ -1,0 +1,43 @@
+import re
+from playwright.sync_api import Playwright, sync_playwright, expect
+
+
+def run(playwright: Playwright) -> None:
+    browser = playwright.chromium.launch(headless=False)
+    context = browser.new_context()
+    page = context.new_page()
+    page.goto("https://release.pear.us/login")
+    page.get_by_text("Login with password").click()
+    page.get_by_role("textbox", name="Phone number").click()
+    page.get_by_role("textbox", name="Phone number").fill("4086257869")
+    page.locator(".MuiInputBase-root.MuiOutlinedInput-root.MuiInputBase-colorPrimary.MuiInputBase-formControl.MuiInputBase-adornedEnd.katana-3zw7l9").click()
+    page.get_by_role("textbox", name="Input your password").fill("Xuan123456")
+    page.get_by_role("button", name="Log in").click()
+    page.goto("https://release.pear.us/demi-release")
+    page.locator(".MuiSvgIcon-root.MuiSvgIcon-fontSizeMedium.shop-text-color").click()
+    page.locator("#simple-popover").get_by_text("Products", exact=True).click()
+    page.locator(".MuiStack-root.katana-1xl4abm > .MuiButtonBase-root").first.click()
+    page.get_by_text("Create a Post").click()
+    page.get_by_role("tab", name="Content").click()
+    page.get_by_role("textbox", name="Pick a bold title for your").click()
+    page.get_by_role("textbox", name="Pick a bold title for your").fill("test ")
+    page.get_by_role("textbox", name="Pick a bold title for your").press("CapsLock")
+    page.get_by_role("textbox", name="Pick a bold title for your").fill("test T2129")
+    page.get_by_role("textbox", name="Pick a bold title for your").press("CapsLock")
+    page.get_by_role("button", name="Add cover media").click()
+    page.get_by_role("button", name="Product media").click()
+    page.get_by_role("img", name="Image of Product").click()
+    page.get_by_role("button", name="Add 1/20 media").click()
+    page.get_by_role("button", name="Done").click()
+    page.get_by_role("button", name="Publish").click()
+    page.get_by_role("button", name="Publish").click()
+    page.get_by_role("tab", name="Posts").click()
+    page.get_by_role("button", name="Image of Product test T2129 $").click()
+
+    # ---------------------
+    context.close()
+    browser.close()
+
+
+with sync_playwright() as playwright:
+    run(playwright)
