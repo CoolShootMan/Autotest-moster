@@ -1,4 +1,4 @@
-## Auto Test 框架 v2.0
+## Auto Test 框架 v3.0
 > pytest + request + playwright +  allure 实现接口及ui自动化测试
 
 简体中文 | [English](./README.en.md)
@@ -14,6 +14,7 @@
 - 支持sql查询断言
 - 支持UI测试用例编写,基于po模式
 - 重写源码page及context方法，支持会话保持
+- 测试完成自动更新线上测试用例的状态，例如：通过，失败，跳过...
 - 测试完成自动生成allure测试报告
 
 ## 目录结构
@@ -23,7 +24,8 @@
 ├─log
 │  └─YYYY-MM-DD.log	# 日志文件
 ├─page
-  └─home.py	# UI层基础封装
+  └─home.py	  # UI层基础封装
+├─recordings	# 录制步骤的文件存放位置，AI可参考此处元素
 ├─report
 │  ├─data           # allure测试结果数据
 │  ├─html			      # allure报告
@@ -44,6 +46,7 @@
 |  ├─generate_data.py # 测试数据生成
 |  ├─read_file.py     # yaml文件获取封装
 |  └─get_cookie.py    # 获取登录用的cookie
+|  └─update_test_status.py    # 更新线上测试用例的状态
 ├─requirements.txt		# 项目依赖库文件
 └─main.py	# 主启动文件
 ```
