@@ -1,4 +1,4 @@
-## Auto Test framework v1.0
+## Auto Test framework v3.0
 > API & UI Auto Test framework by using python language + pytest + allure 
 
 English | [简体中文](./README.md)
@@ -11,6 +11,10 @@ English | [简体中文](./README.md)
 ## function realized
 - Interface data dependency: interface B can use a field in interface a's response as a parameter
 - Dynamic multiple assertions: multiple assertions that dynamically extract the actual expected results and compare them with the specified expected results
+- Support SQL query assertions
+- Support the writing of UI test cases based on the PO model
+- Rewrite the source code of the page and context methods, supporting session persistence
+- Automatically update the status of online test cases upon test completion, such as: passed, failed, skipped...
 - Generate an allure style report when the test has complete.
 ## dependency
 ```
@@ -31,6 +35,7 @@ xlwt==1.3.0
 │  └─YYYY-MM-DD.log	# the log file, end-with YYYY-MM-DD.log
 ├─page
   └─home.py	# UI layer base encapsulation
+├─recordings	# The location where the recording steps are stored can be referred to by the AI based on the elements here.
 ├─report
 │  ├─data           # allure test report data
 │  └─html			# allure test report
@@ -50,6 +55,7 @@ xlwt==1.3.0
 |  ├─generate_data.py # Test data generation
 |  ├─read_file.py     # yaml file gets wrapped
 |  └─get_cookie.py    # Get login cookie
+|  └─update_test_status.py    # Update the status of the online test cases
 ├─requirements.txt		 # dependency file
 └─main.py	# the main file to start the project
 ```
