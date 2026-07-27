@@ -40,6 +40,7 @@ from .base import (
     swipe_to_element,
     fill_stripe_iframe,
     smart_click_optional,
+    ensure_auto_archive,
     smart_click_retry,
     handle_modal,
     auto_handle_modals,
@@ -57,7 +58,7 @@ from .module import (
     click_module_collapse, click_module_expand, verify_module_collapsed, verify_module_expanded,
     verify_element_style, verify_child_element_count,
     verify_element_contains_text, verify_carousel_scroll, verify_carousel_nav_hidden_at_last,
-    delete_all_sections_by_name,
+    delete_all_sections_by_name, remove_card_from_section,
     click_container_button,
     click_shop_event_button,
     click_shop_add_button, click_shop_hamburger, click_add_storefront_module, click_shop_add_module,
@@ -141,6 +142,7 @@ ACTIONS = {
     "verify_carousel_scroll": verify_carousel_scroll,
     "verify_carousel_nav_hidden_at_last": verify_carousel_nav_hidden_at_last,
     "delete_all_sections_by_name": delete_all_sections_by_name,
+    "remove_card_from_section": remove_card_from_section,
 
     # Product/Social specific
     "click_add_button_regex": click_add_button_regex,
@@ -226,6 +228,7 @@ ACTIONS = {
     "smart_click_retry": smart_click_retry,
     "delete_coseller_if_exists": delete_coseller_if_exists,
     "execute_js": execute_js,
+    "ensure_auto_archive": ensure_auto_archive,
 }
 
 

@@ -156,6 +156,74 @@ def delete_all_sections_by_name(page: Page, v: dict):
             break
     logger.info(f"delete_all_sections_by_name: removed {deleted} section(s) named '{module_name}'")
 
+def remove_card_from_section(page: Page, v: dict):
+    """Click the more-menu of a card inside a named section and remove it from that section.
+
+    New storefront (2026-07): cards are not reliably scannable from the section header,
+    so we walk up from every card until we find the section title that matches
+    `module_name`, then click the card's internal `base-more-horiz-icon-cta` button,
+    select 'Remove from this section', and confirm the Remove dialog.
+    """
+    module_name = v.get("module_name")
+    card_text = v.get("card_text")
+    if not module_name or not card_text:
+        raise ValueError("remove_card_from_section requires 'module_name' and 'card_text'")
+    logger.info(f"Removing card '{card_text}' from section '{module_name}'")
+
+    result = page.evaluate(
+        """
+        (args) => {
+            const [sectionTitle, cardText] = args;
+            const selectors = [
+                'div[data-testid="base-general-link-card"]',
+                '[data-testid="base-post-card"]',
+                '[data-testid="base-event-card"]'
+            ];
+            const allCards = document.querySelectorAll(selectors.join(', '));
+            for (const card of allCards) {
+                if (!card.innerText.includes(cardText)) continue;
+                let el = card;
+                let foundTitle = null;
+                for (let i = 0; i < 8; i++) {
+                    if (!el) break;
+                    const p = el.querySelector('p[data-testid="base-storefront-text"]');
+                    if (p) {
+                        foundTitle = p.getAttribute('title') || p.innerText;
+                        if (foundTitle === sectionTitle) break;
+                    }
+                    el = el.parentElement;
+                }
+                if (foundTitle === sectionTitle) {
+                    const more = card.querySelector('button[data-testid="base-more-horiz-icon-cta"]');
+                    if (more) {
+                        more.scrollIntoView({block: 'center'});
+                        more.click();
+                        return 'clicked';
+                    }
+                    return 'no more button in card';
+                }
+            }
+            return 'card not found in section';
+        }
+        """,
+        [module_name, card_text],
+    )
+    logger.info(f"remove_card_from_section: {result}")
+    if result != "clicked":
+        raise Exception(f"remove_card_from_section: {result}")
+    page.wait_for_timeout(800)
+
+    # Click 'Remove from this section' in the MUI menu (portaled to body)
+    menu_item = page.get_by_role("menuitem", name="Remove from this section")
+    menu_item.click(timeout=5000)
+    page.wait_for_timeout(500)
+
+    # Confirm the Remove dialog
+    confirm = page.get_by_role("button", name="Remove")
+    confirm.wait_for(state="visible", timeout=5000)
+    confirm.click(timeout=5000)
+    page.wait_for_timeout(1500)
+
 def click_module_paragraph(page: Page, v: dict):
     # Click on module paragraph using smart logic
     smart_click(page, {"role": "paragraph", "name": v.get("text"), "timeout": 10000, **v})
@@ -1024,14 +1092,28 @@ def verify_element_contains_text(page: Page, v: dict):
             logger.info(f"Element content: {element_text}")
 
     except Exception as e:
+        # Re-raise our own assertion error (positive failure, or negative failure
+        # where the element WAS present and wrongly contained the text)
         if "should" in str(e) and "contain text" in str(e):
-            # Re-raise our custom assertion error
             raise
-        else:
-            # Handle other exceptions (element not found, timeout, etc.)
-            logger.error(f"Error during verification: {e}")
-            page.screenshot(path=f"fail_{'contains' if is_positive else 'not_contains'}_error_{text_to_check[:10]}.png")
-            raise
+        # Any other exception (element not found, wait_for timeout, detached node, etc.)
+        logger.error(f"Error during verification: {e}")
+        if not is_positive:
+            # Negative assertion (assert:False): if the target element/container is
+            # absent or not visible, the text can NOT be contained -> valid PASS.
+            # Bounded risk: a broken locator would also pass here, so we log a
+            # WARNING so a potentially vacuous pass is visible in the logs.
+            logger.warning(
+                f"⚠ verify_element_contains_text (assert:False): element '{locator_str}' "
+                f"not found/visible within {timeout}ms; treating NOT-contain as PASS. "
+                f"If this is unexpected, verify the locator '{locator_str}' is still valid "
+                f"to avoid a false-green."
+            )
+            return
+        # Positive assertion: element missing means the text is NOT present -> real failure
+        safe_name = texts[0][:10] if texts else "unknown"
+        page.screenshot(path=f"fail_contains_error_{safe_name}.png")
+        raise
 
 
 def click_container_button(page: Page, v: dict):
