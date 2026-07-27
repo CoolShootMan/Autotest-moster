@@ -168,7 +168,7 @@ testAddNewPost:   # [LAST: BROKEN 2026-05-06]
     description: "Verify adding new post section in shop page"
     test_step:
         open: "{BASE_URL}/autotestshop"
-        sleep_after_open: 5000
+        sleep_after_open: 2500
         click_shop_add_button:
         R_click_add_section: { role: 'button', name: 'Add storefront section' }
         fill1: { role: 'textbox', name: 'Enter title of the section', value: 'Verify Add post section' }
@@ -259,7 +259,7 @@ testT3788:  # [LAST: FIXED 2026-07-23 v3] — New storefront flow on partnercose
             - assertion_type: "element_visible_by_text"
               text: "auto-test-997-default-product"
 
-testT3789:  # [LAST: BROKEN 2026-05-06]
+testT3789:  # [LAST: PASSED 2026-07-27] — manually verified by user against new storefront (was stale BROKEN 2026-05-06)
     guest: true
     description: "Verify the resale process. The consumer purchases section-Products(Shared with me)"
     test_step:
@@ -824,15 +824,15 @@ testT4556:  # [LAST: PASSED 2026-05-06]
             - assertion_type: "element_visible_by_text"
               text: "Test-event-Auto-archive"
 
-testT5105:  # [LAST: BROKEN 2026-05-06]
+testT5105:  # [LAST: FIXED 2026-07-27]
     description: "Verify co-seller 'Auto-archive completed event posts', and remove the completed event posts from the section"
     test_step:
         # ========================================
         # Partner
         # ========================================
-        open: "{BASE_URL}/autotestshop"
+        open: "{BASE_URL}/events"
         sleep_after_open: 5000
-        click_module_post_view_event_cta: { module_name: 'Upcoming Events', post_title: 'verify-co-seller-auto-archive', button_name: 'View event' }
+        R_click_edit_event_name: { locator: 'div[data-testid="mui-stack"]', name: 'verify-co-seller-auto-archive', exact: true, index: -1 }
         sleep_after_click_event: 2000
         R_click_edit_event: { role: 'button', name: 'Edit event' }
         sleep_after_edit_event: 2000
@@ -856,21 +856,16 @@ testT5105:  # [LAST: BROKEN 2026-05-06]
             - assertion_type: "element_visible_by_text"
               text: []
 
-testT4853:  # [LAST: PASSED 2026-05-06]
+testT4853:  # [LAST: FIXED 2026-07-27]
     description: "Verify that when the status of the new merchant's event automatically becomes 'Completed', the system will automatically create the 'Past event' section and archive the event post."
     test_step:
         open_2: "{BASE_URL}/events/settings"
         sleep_after_open: 5000
-        R_click_auto_archive: { locator: 'input[name="autoArchive"]' }
-        sleep_after_auto_archive: 1000
-        R_click_auto_archive_2: { locator: 'input[name="autoArchive"]' }
-        sleep_after_auto_archive_2: 2000
-        R_click_selected_past_event: { locator: 'div[role="dialog"] div[data-testid="mui-stack"]', name: 'Past Events', optional: true}
-        R_click_apply_1: { locator: 'button[data-track-location="Drawer"]', name: 'Apply' }
-        sleep_after_apply_1: 2000
+        ensure_auto_archive: { enabled: true }
+        sleep_after_auto_archive: 2000
         open_back: "{BASE_URL}/events/create"
         sleep_after_open_back: 5000
-        fill_event_title: { role: 'textbox', name: 'Event title', value: 'Test-event-Auto-archive-past-event' }
+        fill_event_title: { role: 'textbox', name: 'Event title', value: 'Test-event-Auto-archive-past-event-0727' }
         fill_note: { locator: 'input[name="note"]', value: 'Test - note' }
         fill_venue: { role: 'textbox', name: 'Venue', value: 'Test venue' }
         fill_address: { role: 'textbox', name: 'e.g. 123 Main St, Austin, TX', value: 'w' }
@@ -891,11 +886,11 @@ testT4853:  # [LAST: PASSED 2026-05-06]
         R_click_save_lineup: { locator: "button[data-track-location]",  exact: True, name: 'Save and continue to Lineup' }
         sleep_before_finish: 2000
         R_click_finish: { role: 'button', name: 'Finish and create post' }
-        R_click_select_section_1: { locator: "button[data-track-location='Dialog']", name: 'new section use in archiving test cases', exact: true }
-        R_click_view_st: { role: 'button', name: 'View post on storefront' }
+        R_click_finish_select_section: { locator: 'div[data-testid="mui-list-item-button"]' }
+        R_click_view_st: { role: 'button', name: 'Go to event list' }
         sleep_after_view_st: 5000
         auto_handle_modals_1: { timeout: 10000, ignore_if_not_found: true, max_iterations: 3 }
-        click_module_post_view_event_cta: { module_name: 'new section use in archiving test cases', post_title: 'Test-event-Auto-archive-past-event', button_name: 'View event' }
+        R_click_edit_event_name: { locator: 'div[data-testid="mui-stack"]', name: 'Test-event-Auto-archive-past-event-0727', exact: true, index: -1 }
         R_click_edit_event: { role: 'button', name: 'Edit event' }
         sleep_after_edit_event: 2000
         R_click_status_dropdown: { locator: "[data-testid='KeyboardArrowDownIcon']", index: 0 }
@@ -906,7 +901,7 @@ testT4853:  # [LAST: PASSED 2026-05-06]
         sleep_after_save_edit: 2000
         open_back_2: "{BASE_URL}/autotestshop"
         sleep_after_open_back_2: 5000
-        verify_element_contains_text: { container: 'Past Events', locator: '../..', text: ['Test-event-Auto-archive-past-event']}
+        verify_element_contains_text: { container: 'Past Events', locator: '../..', text: ['Test-event-Auto-archive-past-event-0727']}
 
     expect_result:
         description: "Event should be created and then marked as completed successfully"
@@ -915,20 +910,16 @@ testT4853:  # [LAST: PASSED 2026-05-06]
               text: []
 
 # The use case for T4557 is the same as that for T4559
-testT4559:  # [LAST: BROKEN 2026-05-06]
-    description: 'Verify enable "Auto-archive completed event posts", but do not select any section'
+testT4559:  # [LAST: FIXED 2026-07-27]
+    description: 'Verify enable "Auto-archive completed event posts", but do not select any section — completed event still gets archived to "Past Events" by default'
     test_step:
         open: "{BASE_URL}/events/settings"
         sleep_after_open: 5000
-        R_click_auto_archive: { locator: 'input[name="autoArchive"]' }
-        sleep_after_auto_archive: 1000
-        R_click_auto_archive_2: { locator: 'input[name="autoArchive"]' }
-        sleep_after_auto_archive_2: 2000
-        R_click_apply_1: { locator: 'button[data-track-location="Drawer"]', name: 'Apply' }
-        sleep_after_apply_1: 2000
+        ensure_auto_archive: { enabled: true }
+        sleep_after_auto_archive: 2000
         open_back: "{BASE_URL}/events/create"
         sleep_after_open_back: 5000
-        fill_event_title: { role: 'textbox', name: 'Event title', value: 'Test-event-Auto-archive-not-selected' }
+        fill_event_title: { role: 'textbox', name: 'Event title', value: 'Test-event-Auto-archive-not-selected-0727' }
         fill_note: { locator: 'input[name="note"]', value: 'Test - note' }
         fill_venue: { role: 'textbox', name: 'Venue', value: 'Test venue' }
         fill_address: { role: 'textbox', name: 'e.g. 123 Main St, Austin, TX', value: 'w' }
@@ -952,7 +943,7 @@ testT4559:  # [LAST: BROKEN 2026-05-06]
         R_click_finish_select_section: { locator: 'div[data-testid="mui-list-item-button"]'}
         R_click_view_st: { role: 'button', name: 'Go to event list' }
         sleep_after_view_st: 5000
-        R_click_edit_event_name: { locator: 'div[data-testid="mui-stack"]', name: 'Test-event-Auto-archive-not-selected' , exact: true , index: -1}
+        R_click_edit_event_name: { locator: 'div[data-testid="mui-stack"]', name: 'Test-event-Auto-archive-not-selected-0727' , exact: true , index: -1}
         R_click_edit_event: { role: 'button', name: 'Edit event' }
         sleep_after_edit_event: 2000
         R_click_status_dropdown: { locator: "[data-testid='KeyboardArrowDownIcon']", index: 0 }
@@ -963,7 +954,7 @@ testT4559:  # [LAST: BROKEN 2026-05-06]
         sleep_after_save_edit: 2000
         open_2: "{BASE_URL}/autotestshop"
         sleep_after_open_2: 5000
-        verify_element_contains_text: { container: 'new section use in archiving test cases', locator: '../..', text: ['Test-event-Auto-archive-not-selected'], assert: false}
+        verify_element_contains_text: { container: 'Past Events', locator: '../..', text: ['Test-event-Auto-archive-not-selected-0727']}
 
     expect_result:
         description: "Event should be created and then marked as completed successfully"
@@ -1033,11 +1024,8 @@ testT4603:  # [LAST: FAILED 2026-05-06]
         R_click_add_section: { role: 'button', name: 'Add storefront section' }
         sleep_after_section_click: 2000
         fill_section_title: { role: 'textbox', name: 'Enter title of the section', value: 'products' }
-        R_click_continue: { role: 'button', name: 'Continue' }
-        sleep_after_continue: 2000
-        check_products: { role: 'radio', name: 'Products' }
         R_click_add: { role: 'button', name: 'Add' }
-        sleep_after_add: 3000
+        sleep_after_add: 1500
         verify_products_added: { text: 'products', timeout: 10000 }
         verify_no_sibling_add_new: { locator: '[data-testid="base-more-horiz-icon-cta"]', index: -1, text: 'Add new' }
         R_click_more_icon: { locator: '[data-testid="base-more-horiz-icon-cta"]', index: -1 }

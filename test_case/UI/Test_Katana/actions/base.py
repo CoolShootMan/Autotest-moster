@@ -3039,3 +3039,40 @@ def delete_coseller_if_exists(page: Page, v: dict):
         logger.warning(f"delete_coseller_if_exists: toast verification failed: {e}")
         # Don't fail if toast doesn't appear, the delete might still be successful
 
+
+def ensure_auto_archive(page: Page, v: dict):
+    """
+    Idempotently enable/disable the 'Auto-archive completed event posts' switch at
+    {BASE_URL}/events/settings. The switch is a MUI Switch whose real <input> is
+    visually hidden, so we force-click it to open the confirm dialog, then click
+    Apply. This guarantees the final toggle state regardless of the starting state,
+    which matters because T4559/T4853/T5105 share this global merchant setting.
+
+    YAML usage:
+        ensure_auto_archive: { enabled: true }      # turn ON
+        ensure_auto_archive: { enabled: false }     # turn OFF
+    """
+    target = bool(v.get("enabled", True))
+    switch = page.locator('input[name="autoArchive"]')
+    try:
+        current = switch.is_checked(timeout=3000)
+    except Exception:
+        current = None
+    if current == target:
+        logger.info(f"ensure_auto_archive: already {'enabled' if target else 'disabled'}, no action")
+        return
+
+    # Force-click the hidden MUI switch input to open the confirm dialog
+    switch.click(force=True, timeout=5000)
+    page.wait_for_timeout(1200)
+
+    # Click Apply inside the dialog
+    apply_btn = page.locator("[role='dialog']").get_by_role("button", name="Apply").first
+    try:
+        apply_btn.click(timeout=5000)
+    except Exception:
+        page.get_by_role("button", name="Apply").first.click(timeout=5000)
+    page.wait_for_timeout(1500)
+
+    logger.info(f"ensure_auto_archive: set to {'enabled' if target else 'disabled'}")
+

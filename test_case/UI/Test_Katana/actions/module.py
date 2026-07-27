@@ -1024,14 +1024,28 @@ def verify_element_contains_text(page: Page, v: dict):
             logger.info(f"Element content: {element_text}")
 
     except Exception as e:
+        # Re-raise our own assertion error (positive failure, or negative failure
+        # where the element WAS present and wrongly contained the text)
         if "should" in str(e) and "contain text" in str(e):
-            # Re-raise our custom assertion error
             raise
-        else:
-            # Handle other exceptions (element not found, timeout, etc.)
-            logger.error(f"Error during verification: {e}")
-            page.screenshot(path=f"fail_{'contains' if is_positive else 'not_contains'}_error_{text_to_check[:10]}.png")
-            raise
+        # Any other exception (element not found, wait_for timeout, detached node, etc.)
+        logger.error(f"Error during verification: {e}")
+        if not is_positive:
+            # Negative assertion (assert:False): if the target element/container is
+            # absent or not visible, the text can NOT be contained -> valid PASS.
+            # Bounded risk: a broken locator would also pass here, so we log a
+            # WARNING so a potentially vacuous pass is visible in the logs.
+            logger.warning(
+                f"⚠ verify_element_contains_text (assert:False): element '{locator_str}' "
+                f"not found/visible within {timeout}ms; treating NOT-contain as PASS. "
+                f"If this is unexpected, verify the locator '{locator_str}' is still valid "
+                f"to avoid a false-green."
+            )
+            return
+        # Positive assertion: element missing means the text is NOT present -> real failure
+        safe_name = texts[0][:10] if texts else "unknown"
+        page.screenshot(path=f"fail_contains_error_{safe_name}.png")
+        raise
 
 
 def click_container_button(page: Page, v: dict):

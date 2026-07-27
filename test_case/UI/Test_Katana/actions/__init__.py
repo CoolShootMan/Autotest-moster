@@ -40,6 +40,7 @@ from .base import (
     swipe_to_element,
     fill_stripe_iframe,
     smart_click_optional,
+    ensure_auto_archive,
     smart_click_retry,
     handle_modal,
     auto_handle_modals,
@@ -226,6 +227,7 @@ ACTIONS = {
     "smart_click_retry": smart_click_retry,
     "delete_coseller_if_exists": delete_coseller_if_exists,
     "execute_js": execute_js,
+    "ensure_auto_archive": ensure_auto_archive,
 }
 
 
