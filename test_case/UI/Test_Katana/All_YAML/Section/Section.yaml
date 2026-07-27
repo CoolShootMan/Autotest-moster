@@ -111,57 +111,49 @@ testT4622:  # [LAST: FIXED 2026-07-23 v2] — Section header anchor now also req
         description: "Section should collapse then expand correctly"
         assertions: []
 
-testT3555:  # [LAST: PASSED 2026-05-06]
+testT3555:  # [LAST: FIXED 2026-07-27]
     description: "Verify section delete functionality"
     test_step:
         open: "{BASE_URL}/autotestshop"
-        sleep_after_open: 1500
-        #Click section button to trigger post creation flow
-        click_module_add_new: { module_name: 'Updated module' }
-        R_click_no: { locator: "button[data-track-location='Dialog']", name: 'No', exact: true }
-        sleep_after_add: 5000
-        if_discard_drawer:
-            condition:
-                role: "button"
-                name: "Discard"
-            then:
-                click_discard: { role: "button", name: "Discard" }
-                sleep_after_discard: 1500
-        click_enhance_button: { test_id: 'enhance-button-cta' }
-        sleep_after_enhance_click: 2000
-        # Select media items (first two)
-        click_media_icon_1: { locator: 'div[data-testid="shop-brand"]' }
-        click_media_icon_2: { locator: 'div[data-testid="shop-brand"]', index: 1 }
-        # Add products
-        R_click_add_products: { locator: "button[data-track-location='Dialog']", name: 'Add 2/20 product(s)', exact: true }
-        sleep_after_add_products: 1000
-        auto_handle_modals_1: { timeout: 10000, ignore_if_not_found: true, max_iterations: 3 }
-        # Switch to Content tab
-        R_click_content_tab: { role: 'tab', name: 'Content' }
-
-        # Fill post title
-        fill_post_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'Test - add new post for deletion' }
-        # Confirm and publish
-        click_confirm_button: { test_id: 'confirm-button' }
-        R_click_publish: { role: 'button', name: 'Publish' }
-        sleep_after_publish: 3000
-        R_click_got_it: { role: 'button', name: 'Save' }
-        sleep_after_got_it: 5000
-        auto_handle_modals: { timeout: 10000, ignore_if_not_found: true, max_iterations: 3 }
-        click_module_post_view_event_cta: { module_name: 'Updated module', post_title: 'Test - add new post for deletion', button_index: -1 }
-        R_click_edit_post_muen: { role: "button", name: 'Remove from this section', exact: true }
-        R_click_confirm_button: { locator: "button[data-track-location='Dialog']", name: 'Remove', exact: true }
-        sleep_after_click_event: 2000
-        click_module_edit_button: { module_name: 'Updated module' }
-        R_click_delete_section: { role: 'button', name: 'Delete section' }
+        sleep_after_open: 3000
+        # Clean up any stale section left by previous runs
+        delete_all_sections_by_name: { module_name: 'Test-Section-Delete-0727' }
+        sleep_after_cleanup: 2000
+        click_modal_close: {}
+        sleep_after_close_modal: 1000
+        # Create a new General Link section with one card
+        R_click_add: { role: 'button', name: 'Add' }
+        R_click_create_link: { role: 'button', name: 'Create link' }
+        R_click_general_link_type: { text: "General Link", exact: true }
+        R_click_continue: { role: 'button', name: 'Continue' }
+        fill_url_1: { locator: 'input[name="url"]', value: 'baidu.com' }
+        fill_title_1: { placeholder: 'As the bold title on your', value: 'Test link for deletion' }
+        R_click_add_link_1: { locator: "//*[@data-testid='button']", text: "Add", exact: true }
+        sleep_after_add_link_1: 3000
+        R_click_add_to_new_section: { locator: '[data-testid="mui-list-item-button"][aria-label="Select to create new module"]' }
+        fill_section_title: { role: 'textbox', name: 'Enter the title of the section', value: 'Test-Section-Delete-0727' }
+        R_click_apply: { locator: '[data-testid="enhance-button"]', text: 'Apply', exact: true }
+        sleep_after_apply: 3000
+        # Remove the card from the section
+        remove_card_from_section: { module_name: 'Test-Section-Delete-0727', card_text: 'Test link for deletion' }
+        sleep_after_remove: 2000
+        # Try deleting the section but cancel
+        click_module_edit_button: { module_name: 'Test-Section-Delete-0727' }
+        R_click_delete_section: { role: 'menuitem', name: 'Delete section' }
         sleep_after_delete_click: 1500
-        click_confirm_button_1: { locator: "[role='dialog'] [data-track-location='Dialog']", name: 'Delete' , exact: true}
+        R_click_cancel_delete: { role: 'button', name: 'Cancel', exact: true }
+        sleep_after_cancel: 1500
+        # Delete the section for real
+        click_module_edit_button_2: { module_name: 'Test-Section-Delete-0727' }
+        R_click_delete_section_2: { role: 'menuitem', name: 'Delete section' }
+        sleep_after_delete_click_2: 1500
+        R_click_confirm_delete: { locator: "[role='dialog'] [data-track-location='Dialog']", name: 'Delete', exact: true }
         sleep_after_confirm: 5000
     expect_result:
-        description: "Verify that the section is deleted successfully"
+        description: "Card removed and section deleted successfully"
         assertions:
-            - assertion_type: "element_visible_by_text"
-              text: "Delete section success"
+            - assertion_type: "element_not_visible_by_text"
+              text: "Test-Section-Delete-0727"
 
 # ------------------ Section - post  ---------------------------
 testAddNewPost:   # [LAST: BROKEN 2026-05-06]
@@ -770,21 +762,16 @@ testAddNewUpdateSection:  # [LAST: PASSED 2026-05-06]
               text: "new section use in archiving test cases"
 
 
-testT4556:  # [LAST: PASSED 2026-05-06]
+testT4556:  # [LAST: FIXED 2026-07-27]
     description: "Verify event creation and completion (archiving)"
     test_step:
         open_2: "{BASE_URL}/events/settings"
         sleep_after_open: 5000
-        R_click_auto_archive: { locator: 'input[name="autoArchive"]' }
-        sleep_after_auto_archive: 1000
-        R_click_auto_archive_2: { locator: 'input[name="autoArchive"]' }
-        sleep_after_auto_archive_2: 2000
-        R_click_selected_past_event: { locator: 'div[role="dialog"] div[data-testid="mui-stack"]', name: 'new section use in archiving test cases', optional: true}
-        R_click_apply_1: { locator: 'button[data-track-location="Drawer"]', name: 'Apply' }
-        sleep_after_apply_1: 2000
+        ensure_auto_archive: { enabled: true }
+        sleep_after_auto_archive: 2000
         open: "{BASE_URL}/events/create"
         sleep_after_open: 5000
-        fill_event_title: { role: 'textbox', name: 'Event title', value: 'Test-event-Auto-archive' }
+        fill_event_title: { role: 'textbox', name: 'Event title', value: 'Test-event-Auto-archive-0727' }
         fill_note: { locator: 'input[name="note"]', value: 'Test - note' }
         fill_venue: { role: 'textbox', name: 'Venue', value: 'Test venue' }
         fill_address: { role: 'textbox', name: 'e.g. 123 Main St, Austin, TX', value: 'w' }
@@ -805,9 +792,10 @@ testT4556:  # [LAST: PASSED 2026-05-06]
         R_click_save_lineup: { locator: "button[data-track-location]",  exact: True, name: 'Save and continue to Lineup' }
         sleep_before_finish: 2000
         R_click_finish: { role: 'button', name: 'Finish and create post' }
+        R_click_finish_select_section: { locator: 'div[data-testid="mui-list-item-button"]' }
         R_click_view_st: { role: 'button', name: 'Go to event list' }
         sleep_after_view_st: 5000
-        R_click_edit_event: { locator: 'div[data-testid="mui-stack"]', name: 'Test-event-Auto-archive' , exact: true}
+        R_click_edit_event_name: { locator: 'div[data-testid="mui-stack"]', name: 'Test-event-Auto-archive-0727' , exact: true , index: -1}
         sleep_after_edit_event: 2000
         R_click_edit_event_2: { role: 'button', name: 'Edit event' }
         sleep_after_edit_event_1: 2000
@@ -816,13 +804,15 @@ testT4556:  # [LAST: PASSED 2026-05-06]
         sleep_after_edit_event_2: 2000
         R_click_mark_completed_confirm: {  role: 'button', name: 'Mark as Completed' }
         R_click_save_edit: { role: 'button', name: 'Save' }
-        R_click_close_modal: { role: 'button', name: 'Close' }
-        sleep_after_close: 2000
+        sleep_after_save_edit: 2000
+        open_3: "{BASE_URL}/autotestshop"
+        sleep_after_open_3: 5000
+        verify_element_contains_text: { container: 'Past Events', locator: '../..', text: ['Test-event-Auto-archive-0727'] }
     expect_result:
-        description: "Event should be created and then marked as completed successfully"
+        description: "Completed event should be auto-archived to Past Events section"
         assertions:
             - assertion_type: "element_visible_by_text"
-              text: "Test-event-Auto-archive"
+              text: "Test-event-Auto-archive-0727"
 
 testT5105:  # [LAST: FIXED 2026-07-27]
     description: "Verify co-seller 'Auto-archive completed event posts', and remove the completed event posts from the section"
