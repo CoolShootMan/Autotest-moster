@@ -117,6 +117,45 @@ def click_module_edit_button(page: Page, v: dict):
     btn.click(timeout=15000)
     page.wait_for_timeout(1000) # Wait for potential UI transitions
 
+def delete_all_sections_by_name(page: Page, v: dict):
+    """Reliably delete EVERY section whose header title equals module_name.
+
+    Loops and re-queries the DOM each iteration so sections cannot accumulate
+    across runs. This matters for carousel tests: if a previous (failed) run left
+    a stale section behind, the new-storefront 'Add to a new section' will MERGE
+    new links into that one, producing an N-card carousel and breaking the
+    'next hidden at last element' assertion. Cleaning first keeps the section
+    at exactly the 3 links the test creates.
+    """
+    module_name = v.get("module_name")
+    if not module_name:
+        return
+    max_iter = 30
+    deleted = 0
+    for _ in range(max_iter):
+        headers = page.locator("div.katana-1g3r82v").filter(
+            has=page.get_by_text(module_name, exact=True)
+        ).all()
+        if not headers:
+            break
+        try:
+            click_module_edit_button(page, {"module_name": module_name})
+            page.get_by_role("button", name="Delete section", exact=True).click(timeout=5000)
+            page.wait_for_timeout(800)
+            confirm = page.locator("[role='dialog'] [data-track-location='Dialog']").get_by_text("Delete", exact=True)
+            if confirm.count():
+                confirm.first.click(timeout=5000)
+            else:
+                dlg = page.locator("[role='dialog']")
+                if dlg.count():
+                    dlg.get_by_role("button", name="Delete").last.click(timeout=5000)
+            page.wait_for_timeout(1500)
+            deleted += 1
+        except Exception as e:
+            logger.warning(f"delete_all_sections_by_name: iteration failed for '{module_name}': {e}")
+            break
+    logger.info(f"delete_all_sections_by_name: removed {deleted} section(s) named '{module_name}'")
+
 def click_module_paragraph(page: Page, v: dict):
     # Click on module paragraph using smart logic
     smart_click(page, {"role": "paragraph", "name": v.get("text"), "timeout": 10000, **v})
@@ -452,29 +491,76 @@ def verify_carousel_scroll(page: Page, v: dict):
 
     logger.info(f"verify_carousel_scroll: Testing module '{module_name}'")
 
-    # Find the FULL module container (header + body) by locating the header first,
-    # then navigating up to the parent that encompasses both header and carousel body.
-    # The header has the module title text and "Add new" button.
-    # We need the parent container because carousel items are in a sibling div.
-    
-    # Strategy: find the header container (has title + "Add new"), then get its parent
-    header_containers = page.locator("div").filter(
-        has=page.get_by_text(module_name, exact=True)
-    ).filter(
-        has=page.get_by_role("button", name="Add new")
-    ).all()
-    
-    if not header_containers:
-        raise AssertionError(f"Module '{module_name}' header not found on page")
-    
-    header = header_containers[-1]
-    # Navigate up to get the full module container (parent of header contains the body too)
-    module_container = header.locator("xpath=..")
-    
-    # Verify this container is big enough to contain both header and body
+    # --- Robust anchor (new storefront) ---
+    # The new storefront renders the carousel as a HORIZONTAL SCROLLER that is a
+    # descendant of the section root (the header p[data-testid='base-storefront-text']
+    # and the scroller are siblings inside the section root). Anchoring on the
+    # header's parent is unreliable: duplicate section names / stale sections can
+    # resolve to a NON-carousel container (1 card, overflow:visible), which makes
+    # the scroll check a silent no-op (false green). So we locate the scroller
+    # DIRECTLY: the element with overflow-x:auto/scroll AND scrollWidth>clientWidth
+    # that holds the link cards AND whose section header text == module_name.
+    scroll_container_selector = v.get("scroll_container_selector")
+
+    if scroll_container_selector:
+        scroll_el = page.locator(scroll_container_selector).first
+        module_container = scroll_el.locator("xpath=..").locator("xpath=..") if scroll_el.count() else page.locator("body")
+    else:
+        # JS: find the correct carousel scroller and tag it + its section root.
+        tagged = page.evaluate(
+            """(args) => {
+                const {selector, moduleName} = args;
+                const cards = Array.from(document.querySelectorAll(selector));
+                const scrollers = new Set();
+                for (const card of cards) {
+                    let el = card;
+                    for (let i = 0; i < 12; i++) {
+                        el = el.parentElement;
+                        if (!el) break;
+                        const s = getComputedStyle(el);
+                        if ((s.overflowX === 'auto' || s.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1) {
+                            scrollers.add(el);
+                        }
+                    }
+                }
+                for (const sc of scrollers) {
+                    let root = sc;
+                    for (let i = 0; i < 14; i++) {
+                        if (!root.parentElement) break;
+                        root = root.parentElement;
+                        const header = root.querySelector('[data-testid="base-storefront-text"]');
+                        if (header && (header.textContent || '').trim() === moduleName) {
+                            sc.setAttribute('data-carousel-scroll', 'true');
+                            root.setAttribute('data-carousel-section', 'true');
+                            return {ok: true, cardCount: sc.querySelectorAll(selector).length,
+                                    scrollWidth: sc.scrollWidth, clientWidth: sc.clientWidth,
+                                    rootTag: root.tagName};
+                        }
+                    }
+                }
+                return {ok: false, scrollerCount: scrollers.size, totalCards: cards.length};
+            }""",
+            {"selector": link_item_selector, "moduleName": module_name},
+        )
+        logger.info(f"verify_carousel_scroll: scroller detection -> {tagged}")
+        if tagged.get("ok"):
+            scroll_el = page.locator("[data-carousel-scroll='true']").first
+            section_root_loc = page.locator("[data-carousel-section='true']")
+            module_container = section_root_loc.first if section_root_loc.count() else scroll_el
+        else:
+            # Fallback: anchor by header text (legacy behavior) so we still scope something.
+            logger.warning(f"verify_carousel_scroll: no horizontal scroller found for '{module_name}'; falling back to header anchor")
+            header_el = page.locator("p[data-testid='base-storefront-text']").filter(has_text=module_name)
+            if header_el.count() == 0:
+                header_el = page.locator("div.katana-1g3r82v").filter(has=page.get_by_text(module_name, exact=True))
+            if header_el.count() == 0:
+                raise AssertionError(f"Module '{module_name}' section not found on page")
+            module_container = header_el.first.locator("xpath=..")
+            scroll_el = module_container
+
     container_box = module_container.bounding_box()
     logger.info(f"Found module container, size: {container_box['width']:.0f}x{container_box['height']:.0f}px")
-    
+
     module_container.scroll_into_view_if_needed()
     page.wait_for_timeout(500)
 
@@ -485,46 +571,9 @@ def verify_carousel_scroll(page: Page, v: dict):
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.wait_for_timeout(800)
 
-    # Find the scrollable container within the module
-    # Look for the element that has overflow-x scroll/auto
-    scroll_container_selector = v.get("scroll_container_selector")
-    if scroll_container_selector:
-        scroll_el = module_container.locator(scroll_container_selector).first
-    else:
-        # Auto-detect: find the scrollable container using JS
-        # We'll use JS to find and store a reference to the scroll container
-        scroll_container_found = module_container.evaluate("""
-            (container) => {
-                const candidates = container.querySelectorAll('div');
-                for (const el of candidates) {
-                    const style = window.getComputedStyle(el);
-                    if ((style.overflowX === 'auto' || style.overflowX === 'scroll')
-                        && el.scrollWidth > el.clientWidth) {
-                        el.setAttribute('data-auto-scroll-container', 'true');
-                        return true;
-                    }
-                }
-                // Fallback: check container itself
-                const cStyle = window.getComputedStyle(container);
-                if (cStyle.overflowX === 'auto' || cStyle.overflowX === 'scroll') {
-                    container.setAttribute('data-auto-scroll-container', 'true');
-                    return true;
-                }
-                return false;
-            }
-        """)
-        if scroll_container_found:
-            scroll_el = module_container.locator("[data-auto-scroll-container='true']").first
-        else:
-            scroll_el = module_container.locator("div").last  # fallback
-
-    # Debug: take screenshot to see current state
-    page.screenshot(path=f"debug_carousel_before_link_search.png")
-    logger.info(f"Debug screenshot saved: debug_carousel_before_link_search.png")
-
     # Try to find link cards with flexible selectors
     # The carousel may render links as <a>, <div>, or other elements
-    link_selectors_to_try = [link_item_selector, "a", "div[class*='card']", "div[class*='link']", "div[class*='item']", "[role='link']", "div[class*='MuiCard']"]
+    link_selectors_to_try = [link_item_selector, "a", "div[class*='card']", "div[class*='link']", "div[class*='item']", "[role='link']", "div[class*='MuiCard']", "div[data-testid='base-general-link-card']"]
     first_link = None
     used_selector = link_item_selector
     
@@ -556,102 +605,157 @@ def verify_carousel_scroll(page: Page, v: dict):
         page.screenshot(path=f"fail_no_link_items_{module_name[:10]}.png")
         raise AssertionError(f"No visible link items found in module '{module_name}' with any selector")
 
-    link_box = first_link.bounding_box()
-    if not link_box:
-        raise AssertionError(f"Could not get bounding box for link items in module '{module_name}'")
-    expected_scroll_width = link_box["width"]
-    logger.info(f"Found link card using selector '{used_selector}', width: {expected_scroll_width:.1f}px")
+    # Measure the REAL card width (layout offsetWidth, not a possibly-clipped bounding box).
+    try:
+        card_w = first_link.evaluate("el => el.offsetWidth")
+    except Exception:
+        card_w = 0
+    if not card_w:
+        link_box = first_link.bounding_box()
+        card_w = link_box["width"] if link_box else 0
+    expected_scroll_width = card_w
+    logger.info(f"Found link card using selector '{used_selector}', card width: {expected_scroll_width:.1f}px")
 
-    # Get scroll position helper using JS
+    # --- DIAGNOSTIC (harden): confirm the tagged scroller is a real horizontal carousel ---
+    try:
+        diag = page.evaluate("""() => {
+            const sc = document.querySelector('[data-carousel-scroll="true"]');
+            if (!sc) return {scroller: false};
+            return {scroller: true, scrollWidth: sc.scrollWidth, clientWidth: sc.clientWidth,
+                    scrollLeft: sc.scrollLeft, overflowX: getComputedStyle(sc).overflowX,
+                    cardCount: sc.querySelectorAll('div[data-testid="base-general-link-card"]').length};
+        }""")
+        logger.info(f"[DIAG] tagged scroller: {diag}")
+    except Exception as e:
+        logger.warning(f"[DIAG] tagged scroller dump failed: {e}")
+
+    # Scroll position helper (reads the tagged scroller directly).
     def get_scroll_left():
-        return module_container.evaluate("""
-            (container) => {
-                const candidates = container.querySelectorAll('div');
-                for (const el of candidates) {
-                    const style = window.getComputedStyle(el);
-                    if ((style.overflowX === 'auto' || style.overflowX === 'scroll')
-                        && el.scrollWidth > el.clientWidth) {
-                        return el.scrollLeft;
-                    }
-                }
-                return 0;
-            }
-        """)
+        try:
+            return scroll_el.evaluate("el => el.scrollLeft")
+        except Exception:
+            return 0
 
-    # Find nav buttons within the module
+    # Wait until the scroller's scrollLeft stabilizes (handles smooth-scroll animation).
+    def wait_scroll_settle(timeout_ms=2000):
+        last = get_scroll_left()
+        stable = 0
+        elapsed = 0
+        while elapsed < timeout_ms:
+            page.wait_for_timeout(100)
+            elapsed += 100
+            cur = get_scroll_left()
+            if abs(cur - last) < 1:
+                stable += 100
+                if stable >= 300:
+                    return cur
+            else:
+                stable = 0
+            last = cur
+        return last
+
+    # Find nav buttons within the section (scope = module_container).
     def click_nav_button(direction):
-        """Click next or prev button. direction: 'next' or 'prev'"""
         btn = module_container.get_by_role("button", name=direction)
         if btn.count() > 0 and btn.last.is_visible():
             btn.last.click(timeout=5000)
-            page.wait_for_timeout(500)  # Wait for scroll animation
             return True
         else:
-            logger.info(f"'{direction}' button not visible in module '{module_name}'")
+            logger.warning(f"'{direction}' button not visible in module '{module_name}'")
             return False
 
+    # Band for "roughly one card width" (tolerant of inter-card gaps / clientWidth steps).
+    lo = expected_scroll_width * 0.5
+    hi = expected_scroll_width * 1.5
+    logger.info(f"Acceptable one-card scroll band: [{lo:.0f}, {hi:.0f}]px")
+
     # --- Test 1: Click next and verify scroll distance ---
-    initial_scroll = get_scroll_left()
+    initial_scroll = wait_scroll_settle()
     logger.info(f"Initial scroll position: {initial_scroll:.1f}px")
 
-    # Hover again to make sure nav buttons are visible
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.wait_for_timeout(500)
 
-    clicked = click_nav_button("next")
-    if clicked:
-        after_next_scroll = get_scroll_left()
-        actual_scroll_distance = abs(after_next_scroll - initial_scroll)
-        logger.info(f"After next click - scroll position: {after_next_scroll:.1f}px, distance: {actual_scroll_distance:.1f}px")
+    if not click_nav_button("next"):
+        raise AssertionError(f"Could not click 'next' button in module '{module_name}'.")
 
-        diff = abs(actual_scroll_distance - expected_scroll_width)
-        if diff <= tolerance:
-            logger.info(f"✓ Next scroll distance ({actual_scroll_distance:.1f}px) matches link width ({expected_scroll_width:.1f}px) within tolerance ({tolerance}px)")
-        else:
-            logger.warning(f"⚠ Next scroll distance ({actual_scroll_distance:.1f}px) differs from link width ({expected_scroll_width:.1f}px) by {diff:.1f}px")
-    else:
-        raise AssertionError(f"Could not click 'next' button in module '{module_name}'. Make sure there are enough links to require scrolling.")
+    after_next_scroll = wait_scroll_settle()
+    actual_scroll_distance = after_next_scroll - initial_scroll
+    logger.info(f"After next click - scroll position: {after_next_scroll:.1f}px, distance: {actual_scroll_distance:.1f}px")
 
-    # --- Test 2: Click prev and verify scroll distance ---
+    if actual_scroll_distance < lo or actual_scroll_distance > hi:
+        raise AssertionError(
+            f"Carousel 'next' did not scroll by ~one card width. "
+            f"Expected band [{lo:.0f},{hi:.0f}]px (card={expected_scroll_width:.0f}), got {actual_scroll_distance:.0f}px."
+        )
+    logger.info(f"✓ Next scroll distance ({actual_scroll_distance:.1f}px) within one-card band")
+
+    # --- Test 2: Click prev and verify it scrolls back ~one card ---
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     page.wait_for_timeout(500)
 
-    clicked = click_nav_button("prev")
-    if clicked:
-        after_prev_scroll = get_scroll_left()
-        prev_distance = abs(after_prev_scroll - after_next_scroll)
-        logger.info(f"After prev click - scroll position: {after_prev_scroll:.1f}px, distance: {prev_distance:.1f}px")
+    if not click_nav_button("prev"):
+        raise AssertionError(f"Could not click 'prev' button in module '{module_name}'.")
 
-        diff = abs(prev_distance - expected_scroll_width)
-        if diff <= tolerance:
-            logger.info(f"✓ Prev scroll distance ({prev_distance:.1f}px) matches link width ({expected_scroll_width:.1f}px) within tolerance ({tolerance}px)")
-        else:
-            logger.warning(f"⚠ Prev scroll distance ({prev_distance:.1f}px) differs from link width ({expected_scroll_width:.1f}px) by {diff:.1f}px")
-    else:
-        logger.warning("Could not click 'prev' button, skipping prev verification")
+    after_prev_scroll = wait_scroll_settle()
+    prev_distance = after_next_scroll - after_prev_scroll
+    logger.info(f"After prev click - scroll position: {after_prev_scroll:.1f}px, distance back: {prev_distance:.1f}px")
+
+    if prev_distance < lo or prev_distance > hi:
+        raise AssertionError(
+            f"Carousel 'prev' did not scroll back by ~one card width. "
+            f"Expected band [{lo:.0f},{hi:.0f}]px (card={expected_scroll_width:.0f}), got {prev_distance:.0f}px."
+        )
+    logger.info(f"✓ Prev scroll distance ({prev_distance:.1f}px) within one-card band")
 
     # --- Test 3: Navigate to last element, verify next button is hidden ---
     if box:
         page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(300)
 
-    # Click next until we reach the end
-    max_clicks = 10
+    # Compute a safe click budget from the actual scroll range so the test works
+    # for ANY number of cards (and doesn't depend on a fixed magic number).
+    max_scroll = 0
+    try:
+        max_scroll = scroll_el.evaluate("el => el.scrollWidth - el.clientWidth")
+    except Exception:
+        pass
+    card_w = expected_scroll_width if expected_scroll_width else 1
+    max_clicks = max(10, int(max_scroll / card_w) + 3)
+    logger.info(f"Test 3: max_scroll={max_scroll:.0f}px, click budget={max_clicks}")
+
+    reached_end = False
+    last_pos = get_scroll_left()
     for i in range(max_clicks):
         if box:
             page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
         page.wait_for_timeout(300)
-
         next_btn = module_container.get_by_role("button", name="next")
         if next_btn.count() == 0 or not next_btn.last.is_visible():
-            logger.info(f"✓ 'next' button is hidden after {i} clicks (reached last element)")
+            logger.info(f"✓ 'next' button hidden after {i} clicks (reached last element)")
+            reached_end = True
             break
         next_btn.last.click(timeout=5000)
-        page.wait_for_timeout(500)
-    else:
-        logger.warning(f"Clicked next {max_clicks} times but next button still visible")
+        cur = wait_scroll_settle()
+        # Robust end-of-carousel detection: once we can't scroll any further, we're at the last element.
+        if cur >= max_scroll - tolerance:
+            logger.info(f"✓ Reached max scroll ({cur:.0f}/{max_scroll:.0f}px) after {i+1} clicks — at last element")
+            reached_end = True
+            break
+        if cur <= last_pos:
+            # No forward progress on two consecutive attempts → treat as end.
+            logger.info(f"✓ No further scroll progress after {i+1} clicks (at last element)")
+            reached_end = True
+            break
+        last_pos = cur
+
+    if not reached_end:
+        raise AssertionError(
+            f"Clicked 'next' {max_clicks} times but the next button is still visible — "
+            f"carousel did not reach its last element."
+        )
 
     logger.info(f"✓ Carousel scroll verification completed for module '{module_name}'")
 
