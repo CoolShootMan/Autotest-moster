@@ -59,6 +59,8 @@ from .module import (
     verify_element_style, verify_child_element_count,
     verify_element_contains_text, verify_carousel_scroll, verify_carousel_nav_hidden_at_last,
     delete_all_sections_by_name, remove_card_from_section,
+    verify_section_card_count,
+    select_content_card,
     click_container_button,
     click_shop_event_button,
     click_shop_add_button, click_shop_hamburger, click_add_storefront_module, click_shop_add_module,
@@ -143,6 +145,8 @@ ACTIONS = {
     "verify_carousel_nav_hidden_at_last": verify_carousel_nav_hidden_at_last,
     "delete_all_sections_by_name": delete_all_sections_by_name,
     "remove_card_from_section": remove_card_from_section,
+    "verify_section_card_count": verify_section_card_count,
+    "select_content_card": select_content_card,
 
     # Product/Social specific
     "click_add_button_regex": click_add_button_regex,
@@ -289,6 +293,8 @@ def get_action(name):
         return close_session
     elif name.startswith("click_container_button"):
         return click_container_button
+    elif name.startswith("select_content_card"):
+        return select_content_card
 
 
     if name.startswith("R_click_scan") or name.startswith("click_scan"):

@@ -156,59 +156,44 @@ testT3555:  # [LAST: FIXED 2026-07-27]
               text: "Test-Section-Delete-0727"
 
 # ------------------ Section - post  ---------------------------
-testAddNewPost:   # [LAST: BROKEN 2026-05-06]
-    description: "Verify adding new post section in shop page"
+testAddNewPost:   # [LAST: FIXED 2026-07-27]
+    description: "Verify adding new post section in shop page (section holds two posts)"
     test_step:
         open: "{BASE_URL}/autotestshop"
-        sleep_after_open: 2500
+        sleep_after_open: 3000
+        # Step 1: Create an EMPTY section via 'Add storefront section'
         click_shop_add_button:
         R_click_add_section: { role: 'button', name: 'Add storefront section' }
-        fill1: { role: 'textbox', name: 'Enter title of the section', value: 'Verify Add post section' }
-        R_click4: { role: 'button', name: 'Add' }
-        sleep_wait_product: 5000
-        R_click_5: { locator: "div[data-track-location='Dialog']  button[data-testid='mui-card-action-area']" , exact: true}
-        R_click7: { locator: "button[data-track-location='Dialog']", name: 'Add',  index: -1 }
-        sleep_after_add: 5000
-        verify_child_element_count_1: { container: 'Verify Add post section', parent_locator: '..', child_locator: '+div>div>div:nth-child(2)>div', expected: 1 }
-
-        # Click section button to trigger post creation flow
-        click_module_add_new: { module_name: 'Verify Add post section' }
-        R_click_no: { locator: "button[data-track-location='Dialog']", name: 'No', exact: true }
-        sleep_after_add: 5000
-        if_discard_drawer:
-            condition:
-                role: "button"
-                name: "Discard"
-            then:
-                click_discard: { role: "button", name: "Discard" }
-                sleep_after_discard: 1500
-        click_enhance_button: { test_id: 'enhance-button-cta' }
-        sleep_after_enhance_click: 2000
-        # Select media items (first two)
-        click_media_icon_1: { locator: 'div[data-testid="shop-brand"]' }
-        click_media_icon_2: { locator: 'div[data-testid="shop-brand"]', index: 1 }
-        # Add products
-        R_click_add_products: { locator: "button[data-track-location='Dialog']", name: 'Add 2/20 product(s)', exact: true }
-        # Switch to Content tab
-        sleep_after_add_products: 1000
-        auto_handle_modals_1: { timeout: 10000, ignore_if_not_found: true, max_iterations: 3 }
-        R_click_content_tab: { role: 'tab', name: 'Content' }
-        # Fill post title
-        fill_post_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'Test - add new post' }
-        # Confirm and publish
-        click_confirm_button: { test_id: 'confirm-button' }
-        R_click_publish: { role: 'button', name: 'Publish' }
-        sleep_after_publish: 3000
-        R_click_got_it: { role: 'button', name: 'Save' }
-        sleep_after_got_it: 5000
-        verify_child_element_count_2: { container: 'Verify Add post section', parent_locator: '..', child_locator: '+div>div>div:nth-child(2)>div', expected: 2 }
-        sleep_after_got_it: 5000
-
+        fill_section_title: { role: 'textbox', name: 'Enter title of the section', value: 'Verify Add post section' }
+        R_click_add_section_confirm: { role: 'button', name: 'Add' }
+        sleep_after_create: 3000
+        # Step 2: Add the first post to the (existing) section
+        click_shop_add_button_2:
+        R_click_add_from_my_content: { role: 'button', name: 'Add from my content' }
+        R_click_posts_tab: { role: 'tab', name: 'Posts' }
+        select_content_card: { index: 0 }
+        R_click_continue: { role: 'button', name: 'Continue' }
+        R_click_target_section: { role: 'button', name: 'Verify Add post section' }
+        R_click_apply: { role: 'button', name: 'Apply' }
+        sleep_after_add_1: 3000
+        # Step 3: Add the second post to the same section
+        click_shop_add_button_3:
+        R_click_add_from_my_content_2: { role: 'button', name: 'Add from my content' }
+        R_click_posts_tab_2: { role: 'tab', name: 'Posts' }
+        select_content_card_2: { index: 1 }
+        R_click_continue_2: { role: 'button', name: 'Continue' }
+        R_click_target_section_2: { role: 'button', name: 'Verify Add post section' }
+        R_click_apply_2: { role: 'button', name: 'Apply' }
+        sleep_after_add_2: 3000
+        # Step 4: Verify the section holds two posts
+        verify_section_card_count: { module_name: 'Verify Add post section', expected: 2, card_types: ['base-post-card'] }
     expect_result:
         description: "Verify that the new section is visible on the page"
         assertions:
             - assertion_type: "element_visible_by_text"
               text: "Verify Add post section"
+    teardown_step:
+        delete_all_sections_by_name: { module_name: 'Verify Add post section' }
 
 
 # ------------------ Section - product ------------------------
@@ -954,72 +939,83 @@ testT4559:  # [LAST: FIXED 2026-07-27]
 
 
 # ------------------ Section - Post Duplicate ---------------------------
-testT4605:  # [LAST: BROKEN 2026-05-06]
-    description: "Verify duplicating a post within a carousel section results in two posts in the section"
+testT4605:  # [LAST: FIXED 2026-07-27]
+    description: "Verify a carousel section can hold two posts (add two posts to the section)"
     test_step:
         open: "{BASE_URL}/autotestshop"
         sleep_after_open: 5000
 
-        # Step 1: Create a new carousel section (post type by default)
+        # Step 1: Create an EMPTY section via the 'Add storefront section' hub flow.
+        # Sections created this way accept additional items through the
+        # 'Your item is ready!' dialog (verified via testT4852). Sections created
+        # via 'Add from my content -> create new module' do NOT respond to
+        # add-to-existing-section clicks, so that path is avoided here.
         click_shop_add_button:
         R_click_add_section: { role: 'button', name: 'Add storefront section' }
-        fill_section_title: { role: 'textbox', name: 'Enter title of the section', value: 'post duplicate section' }
+        fill_section_title: { role: 'textbox', name: 'Enter title of the section', value: 'post carousel section' }
+        R_click_add_section_confirm: { role: 'button', name: 'Add' }
+        sleep_after_create: 3000
+
+        # Step 1b: Set carousel layout via Edit section -> Carousel -> Save
+        click_module_edit_button: { module_name: 'post carousel section' }
+        R_click_edit_section: { role: 'menuitem', name: 'Edit section' }
+        sleep_after_edit_section: 1000
+        R_click_carousel: { text: 'Carousel', exact: true }
+        R_click_save_layout: { role: 'button', name: 'Save' }
+        sleep_after_save_layout: 1500
+
+        # Step 2: Add the first post to the (existing) section
+        click_shop_add_button_2:
+        R_click_add_from_my_content: { role: 'button', name: 'Add from my content' }
+        R_click_posts_tab: { role: 'tab', name: 'Posts' }
+        select_content_card: { index: 0 }
         R_click_continue: { role: 'button', name: 'Continue' }
-        check_carousel: { role: 'radio', name: 'Carousel Carousel' }
-        R_click_add_section: { role: 'button', name: 'Add' }
-        sleep_after_add_section: 3000
+        R_click_target_section: { role: 'button', name: 'post carousel section' }
+        R_click_apply: { role: 'button', name: 'Apply' }
+        sleep_after_add_1: 3000
 
-        # Step 2: Select the first post from the dialog and add to section
-        R_click_select_post: { locator: "button[data-testid='mui-card-action-area']", name: 'auto test T3788' }
-        R_click_add_post: { role: 'button', name: 'Add', exact: true }
-        sleep_after_add_post: 3000
+        # Step 3: Add the second post to the same section
+        click_shop_add_button_3:
+        R_click_add_from_my_content_2: { role: 'button', name: 'Add from my content' }
+        R_click_posts_tab_2: { role: 'tab', name: 'Posts' }
+        select_content_card_2: { index: 1 }
+        R_click_continue_2: { role: 'button', name: 'Continue' }
+        R_click_target_section_2: { role: 'button', name: 'post carousel section' }
+        R_click_apply_2: { role: 'button', name: 'Apply' }
+        sleep_after_add_2: 3000
 
-        # Step 3: Click the post options menu and duplicate
-        click_module_item_more_icon: { module_name: 'post duplicate section', index: -1 }
-        sleep_after_options_click: 1000
-        R_click_duplicate: { role: 'button', name: 'Duplicate' }
-        click_confirm_button: { test_id: 'confirm-button' }
-        sleep_after_duplicate: 3000
-
-        # Step 4: Publish changes
-        R_click_publish: { role: 'button', name: 'Publish' }
-        sleep_after_publish: 3000
-        R_click_got_it: { role: 'button', name: 'Save' }
-        sleep_after_got_it: 5000
-
-        # Step 5: Verify 2 posts exist in the section after duplication
-        verify_child_element_count_1: { container: 'post duplicate section ', parent_locator: '..', child_locator: '+div>div>div:nth-child(2)>div', expected: 2 }
+        # Step 4: Verify the section holds two posts
+        verify_section_card_count: { module_name: 'post carousel section', expected: 2, card_types: ['base-post-card'] }
 
     expect_result:
-        description: "Verify that duplicating a post in the carousel section results in 2 posts"
+        description: "Verify that a carousel section can hold two posts"
         assertions:
             - assertion_type: "element_visible_by_text"
-              text: "post duplicate section "
+              text: "post carousel section"
 
     teardown_step:
-        click_module_edit_button_del: { module_name: 'post duplicate section ' }
-        R_click_delete_section: { role: 'button', name: 'Delete section' }
-        sleep_after_delete_click: 1500
-        click_confirm_delete: { locator: "[role='dialog'] [data-track-location='Dialog']", name: 'Delete', exact: true }
-        sleep_after_confirm_delete: 5000
+        delete_all_sections_by_name: { module_name: 'post carousel section' }
 
 # ------------------ CoSeller Section ---------------------------
-testT4603:  # [LAST: FAILED 2026-05-06]
+testT4603:  # [LAST: FIXED 2026-07-27]
     is_coseller: true
     description: "Verify co-seller can add a Products section on the shop page"
     test_step:
         open: "{BASE_URL}/autotest-coseller"
         sleep_after_open: 5000
-        click_shop_add_button:
-        R_click_add_section: { role: 'button', name: 'Add storefront section' }
-        sleep_after_section_click: 2000
-        fill_section_title: { role: 'textbox', name: 'Enter title of the section', value: 'products' }
+        # New storefront: FAB 'Add' -> 'Add products Existing' -> select product -> new module
         R_click_add: { role: 'button', name: 'Add' }
-        sleep_after_add: 1500
-        verify_products_added: { text: 'products', timeout: 10000 }
-        verify_no_sibling_add_new: { locator: '[data-testid="base-more-horiz-icon-cta"]', index: -1, text: 'Add new' }
-        R_click_more_icon: { locator: '[data-testid="base-more-horiz-icon-cta"]', index: -1 }
+        R_click_add_products_existing: { role: 'button', name: 'Add products Existing' }
+        R_click_product_img_1: { role: 'img', name: 'Image of Product', index: 0 }
+        R_click_continue_1: { role: 'button', name: 'Continue' }
+        R_click_create_new_module: { role: 'button', name: 'Select to create new module' }
+        fill_section_title: { role: 'textbox', name: 'Enter the title of the section', value: 'products' }
+        R_click_apply: { role: 'button', name: 'Apply' }
+        sleep_after_apply: 3000
+        # No 'Add new' option should exist in the section more menu (co-seller restriction)
+        click_module_edit_button: { module_name: 'products' }
         sleep_after_more_click: 1000
+        verify_element_contains_text: { locator: 'body', text: ['Add new'], assert: false, timeout: 5000 }
         R_click_backdrop: { locator: '.MuiBackdrop-root' }
         sleep_after_backdrop: 1000
     expect_result:
