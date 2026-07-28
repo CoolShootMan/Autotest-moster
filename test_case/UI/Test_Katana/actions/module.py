@@ -133,14 +133,20 @@ def delete_all_sections_by_name(page: Page, v: dict):
     max_iter = 30
     deleted = 0
     for _ in range(max_iter):
-        headers = page.locator("div.katana-1g3r82v").filter(
+        # Use the stable title testid instead of a build-specific hashed class.
+        headers = page.locator("p[data-testid='base-storefront-text']").filter(
             has=page.get_by_text(module_name, exact=True)
         ).all()
         if not headers:
             break
         try:
             click_module_edit_button(page, {"module_name": module_name})
-            page.get_by_role("button", name="Delete section", exact=True).click(timeout=5000)
+            # New storefront (2026-07): section more-menu items are <li role='menuitem'>,
+            # not buttons. Try menuitem first, fall back to button for older builds.
+            try:
+                page.get_by_role("menuitem", name="Delete section", exact=True).click(timeout=5000)
+            except Exception:
+                page.get_by_role("button", name="Delete section", exact=True).click(timeout=5000)
             page.wait_for_timeout(800)
             confirm = page.locator("[role='dialog'] [data-track-location='Dialog']").get_by_text("Delete", exact=True)
             if confirm.count():
@@ -1172,3 +1178,140 @@ def click_container_button(page: Page, v: dict):
     prefix = "xpath=" if button_selector.startswith("/") else ""
     container.locator(f"{prefix}{button_selector}").nth(button_index).click(timeout=10000)
     logger.info(f"✓ Clicked button '{button_selector}' at index {button_index}")
+
+
+def select_content_card(page: Page, v: dict):
+    """Select an existing post/product card in the 'Add from my content' picker.
+
+    The picker list lives inside a scroll container and the cards render below the
+    fold, so a plain smart_click lands on an in-dialog overlay (the card's own
+    content stack) and never toggles selection. We scroll the card into view, then
+    dispatch a real mouse click at the card's on-screen center — proven to enable
+    the Continue button.
+
+    YAML:
+        select_content_card: { index: 0 }            # first card
+        select_content_card: { index: 1 }            # second card
+    """
+    index = v.get("index", 0)
+    timeout = v.get("timeout", 8000)
+    card = page.locator("button[data-testid='mui-card-action-area']").nth(index)
+    card.scroll_into_view_if_needed()
+    page.wait_for_timeout(400)
+    box = card.bounding_box()
+    if not box:
+        raise AssertionError(f"select_content_card: card index {index} has no bounding box")
+    cx = box["x"] + box["width"] / 2
+    cy = box["y"] + box["height"] / 2
+    page.mouse.click(cx, cy)
+    page.wait_for_timeout(600)
+    # confirm selection registered (Continue should enable)
+    try:
+        cont = page.get_by_role("button", name="Continue").first
+        if not cont.is_enabled(timeout=3000):
+            logger.warning(f"select_content_card: Continue still disabled after selecting card {index}")
+    except Exception as e:
+        logger.debug(f"select_content_card: continue-check skipped ({e})")
+    logger.info(f"✓ Selected content card index {index}")
+
+
+def verify_section_card_count(page: Page, v: dict):
+    """Count content cards inside a named storefront section and assert the total.
+
+    New storefront (2026-07): a section's header (the title ``<p data-testid='base-storefront-text'>``)
+    and its body (where the cards live) are SIBLINGS under the section root, so the legacy
+    ``verify_child_element_count`` trick (container + parent_locator '..') cannot reach the cards.
+    This action instead locates the section by its stable title testid, walks up to the section
+    root (the first ancestor that also contains a content card), and counts every ``base-*-card``
+    testid underneath it. No build-specific hashed classes are used.
+
+    Supported parameters:
+    - module_name: Section title to target (required)
+    - expected: Expected card count (required)
+    - operator: equals|gt|lt|gte|lte|ne (default 'equals')
+    - card_types: Optional extra testid fragment to restrict counting
+      (default counts base-post-card / base-product-card / base-general-link-card /
+      base-event-card). e.g. card_types: ['base-post-card'] to count only posts.
+    - timeout: ms, default 8000
+
+    Usage:
+        verify_section_card_count: { module_name: 'post duplicate section', expected: 2 }
+        verify_section_card_count: { module_name: 'my posts', expected: 2, card_types: ['base-post-card'] }
+    """
+    module_name = v.get("module_name")
+    if not module_name:
+        raise ValueError("verify_section_card_count: 'module_name' is required")
+    expected = v.get("expected")
+    if expected is None:
+        raise ValueError("verify_section_card_count: 'expected' is required")
+    operator = v.get("operator", "equals")
+    timeout = v.get("timeout", 8000)
+    card_types = v.get("card_types") or [
+        "base-post-card", "base-product-card",
+        "base-general-link-card", "base-event-card",
+    ]
+
+    # The section title is a stable <p data-testid='base-storefront-text'>. Its
+    # parent chain leads up to the section root, which is the first ancestor that
+    # ALSO contains a content card. We walk up in JS so we never depend on the
+    # build-specific hashed katana-* classes (the section root class changes per
+    # build, and the header is NOT the direct parent of the cards).
+    js = """([name, types]) => {
+        const HDR = "p[data-testid='base-storefront-text']";
+        const titles = Array.from(document.querySelectorAll(HDR))
+            .filter(e => (e.textContent||'').trim() === name);
+        if (!titles.length) return {found:false};
+        const sel = types.map(t => "[data-testid*='" + t + "']").join(',');
+        // The section root is the highest ancestor that contains exactly ONE
+        // header (this section's). Above it, the parent contains multiple
+        // sections (more than one header). Walking up past the root would match
+        // the whole storefront and report a bogus count for an empty section,
+        // so we stop as soon as the header count != 1 (or once cards are found).
+        let node = titles[0].parentElement;
+        let root = titles[0];
+        for (let i = 0; i < 12 && node; i++) {
+            const hcount = node.querySelectorAll(HDR).length;
+            if (hcount === 1) { root = node; }
+            else { break; }
+            if (node.querySelector(sel)) break;
+            node = node.parentElement;
+        }
+        return {found:true, count: root.querySelectorAll(sel).length};
+    }"""
+    result = page.evaluate(js, [module_name, card_types])
+    # Retry briefly in case a post-action render/transition hasn't settled.
+    attempts = max(1, int(timeout / 300))
+    for _ in range(attempts):
+        if result.get("found"):
+            break
+        page.wait_for_timeout(300)
+        result = page.evaluate(js, [module_name, card_types])
+    if not result.get("found"):
+        raise AssertionError(
+            f"verify_section_card_count: section '{module_name}' not found "
+            f"(no matching header/cards). card_types={card_types}"
+        )
+    actual = result["count"]
+
+    passed = False
+    if operator == "equals":
+        passed = actual == expected
+    elif operator == "gt":
+        passed = actual > expected
+    elif operator == "lt":
+        passed = actual < expected
+    elif operator == "gte":
+        passed = actual >= expected
+    elif operator == "lte":
+        passed = actual <= expected
+    elif operator == "ne":
+        passed = actual != expected
+    else:
+        raise ValueError(f"verify_section_card_count: unsupported operator '{operator}'")
+
+    status = "✓" if passed else "✗"
+    msg = f"{status} Section '{module_name}' card count: {actual} (expected {expected}, op {operator})"
+    if not passed:
+        logger.error(msg)
+        raise AssertionError(f"Section card count verification failed:\n{msg}")
+    logger.info(msg)
