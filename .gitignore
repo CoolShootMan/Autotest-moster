@@ -152,4 +152,3 @@ tools/_*.py
 
 # === QA performance test debug
 test_case/output
-test_case/performance testing
