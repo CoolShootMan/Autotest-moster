@@ -54,6 +54,15 @@ ONES_TYPE_FUNCTIONAL=7qLS7W5f
 
 **Agent behaviour on first run**: Before Step 1, check whether `backend/.env` exists and contains the personal credentials. If any are missing, **stop and ask the user** for their Jira email, Jira API token, ONES email, ONES password, and Figma token, then write all fields (personal + team constants) into `backend/.env` and run `ones_writer.py refresh-token`. Do not proceed until credentials are in place. The user only needs to provide a Jira ticket link — the agent handles the rest.
 
+## Pre-flight Hard Rules (must obey — these were learned from real incidents)
+
+These rules come from KAT-11830 and earlier tickets. Breaking any of them leads to silent regressions in ONES or Jira.
+
+1. **Pure-English content for ONES test cases.** The platform is English-only end to end (ONES UI/DB, Jira UI, GitHub, internal docs). Every name / desc / condition / step-desc / step-result written to ONES must be English. This includes module names, titles, preconditions, descriptions — no Chinese characters anywhere in `data/<TICKET>_test_cases.json` or anything that flows into ONES. (KAT-11830 incident, 2026-08-04: the AI generated Chinese cases despite knowing the system was English, and the user had to ask for a re-translate push — never again.) The Chinese草稿 file `data/KAT-11830_No7_test_cases_draft.md` is fine as an offline worksheet, but the JSON that hits ONES is English. The Chinese草稿 must NEVER become the JSON.
+2. **Jira backfill is part of the same flow — never leave it for the user.** Step 5 (`ones_create_plan_v3.py`) returns the plan UUID at the very end of its run. The agent must immediately capture that UUID and run `python tools/jira_backfill_test_link.py <TICKET> <PLAN_UUID>`. Returning to the user without backfilling is a defect. (KAT-11830 incident again: the plan finished in the background, the agent reported "计划正在后台创建" and stopped, then the user had to ask "为什么不回填 Jira?" — that is not what an automation skill does.)
+3. **Real ones_writer.py field contract, not the docs.** The SKILL.md example block below shows `title` / `description` / `precondition` / `expect` / `P0` / `P1`, but `ones_writer.create_case` reads **name** / **desc** / **condition** / **result** / **highest** / **high**. The doc example is outdated as of 2026-07. Use the real keys (this section) when generating JSON — copy a known-good case from `data/<existing_ticket>_test_cases.json` if unsure.
+4. **The 15-tool-call rule for skill housekeeping.** After any flow that touches ≥3 ONES calls (batch / link / verify / update), do the bookkeeping once at the end: delete temp probe scripts in `tools/_*.py`, save any new stable utility (e.g. `jira_backfill_test_link.py`) to `tools/`, append a bullet to today's memory file.
+
 ## Field & UUID Reference
 
 See `references/ones_jira_reference.md` for the authoritative list of ONES UUIDs, priority map, Jira custom field IDs, and UI selectors. Load it whenever exact IDs are needed.
@@ -98,17 +107,20 @@ Before generating cases, the agent must explicitly list:
 
 ### Step 2 — Generate test cases
 
-Analyse the Jira description and Figma analysis and draft `data/<TICKET>_test_cases.json`. Each case:
+Analyse the Jira description and Figma analysis and draft `data/<TICKET>_test_cases.json`. Each case uses the **real `ones_writer.create_case` field contract** (not the older doc keys):
+
 ```json
 {
-  "title": "...",
-  "description": "...",
-  "precondition": "...",
-  "steps": [{"desc": "...", "expect": "..."}],
-  "priority": "P0" | "P1",
+  "name": "Verify ...",
+  "desc": "Scenario description (English)",
+  "condition": "Preconditions (English)",
+  "steps": [{"desc": "...", "result": "..."}],
+  "priority": "highest" | "high",
   "module_uuid": "<module UUID>"
 }
 ```
+
+(`title` / `description` / `precondition` / `expect` / `P0` / `P1` shown in earlier doc revisions are outdated — `create_case` will KeyError on them. P0 maps to `"highest"`, P1 maps to `"high"`.)
 
 **Module selection** (must be decided per ticket — never hardcode):
 - Run `python tools/ones_writer.py modules` to list all modules with their full paths.
@@ -272,19 +284,23 @@ Uses the `addTestcasePlanCase` GraphQL mutation.
 
 ### Step 7 — Backfill Jira
 
-PUT the ONES plan URL into Jira's `Test Case Link for QA` field (`customfield_10090`, string):
+ONES UI URL is auto-captured in `data/ones_create_plan.json` (or printed by `ones_create_plan_v3.py` as `https://ones.cn/project/#/testcase/team/<TEAM>/plan/<PLAN_UUID>/library`). PUT it into Jira's `Test Case Link for QA` field (`customfield_10090`, string) using the dedicated tool:
+
 ```
-PUT /rest/api/3/issue/<TICKET>
-{"fields": {"customfield_10090": "<ONES_PLAN_URL>"}}
+"C:/Users/tester/.workbuddy/binaries/python/envs/default/Scripts/python.exe" tools/jira_backfill_test_link.py <TICKET> <PLAN_UUID>
 ```
-Success returns HTTP 204. Verify by re-fetching the field.
+
+The tool reads `JIRA_EMAIL` / `JIRA_API_TOKEN` from `backend/.env` (already configured for this repo), issues `PUT /rest/api/3/issue/<TICKET>` with `{"fields": {"customfield_10090": "<ONES_PLAN_URL>"}}`, then immediately re-fetches the field to verify. Success: HTTP 204 + MATCH. Failure: HTTP error or MISMATCH (exit 1).
+
+**Do not let the user ask for this step.** Treat `ones_create_plan_v3.py` finishing as the trigger to backfill right then and there. If something blocks backfill (token expired, Jira down, etc.), report the cause explicitly — never silently leave the field empty.
 
 ### Step 8 — Final verification (manual spot-check)
 
 After the full pipeline, do a quick visual check in ONES and Jira:
+- **ONES case language**: Pure English throughout (Pre-flight Rule 1). Random-sample 2–3 cases via `cases`/`uuid=<X>` endpoint and assert the response contains no characters in `\u4e00`–`\u9fff`. If it does, the JSON was Chinese — translate and re-push via `update_case_steps` (it accepts new name/desc/condition in the body too).
 - **ONES**: Open the test plan, verify all cases are linked, priorities are correct, and each case has steps with expected results.
-- **ONES case titles**: Confirm titles start with `Verify ...` (or another clear action verb) and contain no internal tracking prefixes (`KAT-XXXX TN:`). If any slipped through, edit them inline in ONES UI — this is a 10-second manual fix, not worth automating.
-- **Jira**: Confirm the `Test Case Link for QA` field shows the correct ONES plan URL.
+- **ONES case titles**: Confirm titles start with `Verify ...` (or another clear action verb) and contain no internal tracking prefixes (`KAT-XXXX TN:`).
+- **Jira**: Confirm the `Test Case Link for QA` field shows the correct ONES plan URL (it was just backfilled in Step 7; quick re-fetch should match).
 
 ## Critical Constraints & Pitfalls
 
