@@ -1,0 +1,14 @@
+{
+  "values": [
+    {
+      "key": "partner_vanityUrl",
+      "value": "autotestshop",
+      "enabled": true
+    },
+    {
+      "key": "merchant_id_autotest",
+      "value": "5f6f1eda-3d2e-4d8e-8e94-0700c00f482d",
+      "enabled": true
+    }
+  ]
+}
