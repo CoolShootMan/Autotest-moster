@@ -204,6 +204,8 @@ def assert_zero_db_queries(
     response: httpx.Response,
     resource: str,
     attempt: str = "verify",
+    url: str = "",
+    warmup_db_queries: int = None,
 ):
     """
     断言本次请求未产生任何 DB 查询（缓存完全命中）。
@@ -212,19 +214,43 @@ def assert_zero_db_queries(
         response: httpx 响应对象。
         resource: 资源标识（如 URL 路径），用于错误信息。
         attempt: 请求阶段描述（如 "warm-up" / "verify" / "concurrent-3"）。
+        url: 完整请求 URL（可选，提供时为错误信息补充完整端点地址）。
+        warmup_db_queries: 预热阶段的 DB 查询次数（可选）。提供时在错误信息中
+            追加 warm-up → verify 对比，帮助诊断缓存未命中的根因。
     """
     db_queries = get_db_queries(response)
+    full_url_line = f"\n  Endpoint: GET {url}" if url else ""
     assert db_queries != -1, (
         f"X-DB-Query-Count header missing — backend instrumentation not deployed?\n"
-        f"Resource: {resource}"
+        f"  Resource: {resource}{full_url_line}"
     )
+
+    # 构建预热 → 验证对比信息
+    warmup_line = ""
+    if warmup_db_queries is not None and warmup_db_queries >= 0:
+        if warmup_db_queries == 0:
+            warmup_line = (
+                f"\n  Warm-up DB queries: 0 → Verify DB queries: {db_queries}\n"
+                f"  Warning: warm-up also returned 0 — "
+                f"header instrumentation may be broken on both phases, not a cache regression."
+            )
+        else:
+            warmup_line = (
+                f"\n  Warm-up DB queries: {warmup_db_queries} → Verify DB queries: {db_queries}\n"
+                f"  Cache effectiveness: 0% "
+                f"(warm-up populated {warmup_db_queries} DB queries but verify leaked {db_queries})"
+            )
+
     assert db_queries == 0, (
-        f"Cache regression detected!\n"
-        f"Resource: {resource}\n"
-        f"Attempt: {attempt}\n"
-        f"Expected DB queries: 0\n"
-        f"Actual DB queries:   {db_queries}\n"
-        f"Status: {response.status_code}"
+        f"Cache regression detected!{full_url_line}{warmup_line}\n"
+        f"  Phase: {attempt} (2nd read after warm-up)\n"
+        f"  Expected: x-db-query-count = 0\n"
+        f"  Actual:   x-db-query-count = {db_queries}\n"
+        f"  Action: This endpoint leaked {db_queries} DB queries on a supposed cache hit.\n"
+        f"  Check: 1) Is the cache middleware deployed for this endpoint?\n"
+        f"         2) Is the cache TTL shorter than the interval between warm-up and verify?\n"
+        f"         3) Did the warm-up response properly populate the cache?\n"
+        f"         4) Redis connection lost or cache evicted between warm-up and verify?"
     )
 
 

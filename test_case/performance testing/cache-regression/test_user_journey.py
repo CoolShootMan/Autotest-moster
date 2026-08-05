@@ -11,6 +11,7 @@ KAT-11756 Task: Storefront → Post Detail User Journey Cache Validation.
 import pytest
 from conftest import (
     assert_zero_db_queries,
+    get_db_queries,
     KATANA_API,
     KATANA_AUTH_HEADERS,
 )
@@ -71,6 +72,7 @@ class TestUserJourneyCache:
             assert resp.status_code == 200, (
                 f"Storefront warm-up failed [{ep['label']}]: status={resp.status_code}"
             )
+            ep["warmup_db"] = get_db_queries(resp)
 
         # Step 3: 预热 Post Detail katana API
         for ep in POST_DETAIL_ENDPOINTS:
@@ -79,6 +81,7 @@ class TestUserJourneyCache:
             assert resp.status_code == 200, (
                 f"Post-detail warm-up failed [{ep['label']}]: status={resp.status_code}"
             )
+            ep["warmup_db"] = get_db_queries(resp)
 
         # ==================== 验证阶段 ====================
         # Step 4: 先验证 Post Detail katana（模拟用户点击进入）
@@ -89,9 +92,12 @@ class TestUserJourneyCache:
                 f"Post-detail verify failed [{ep['label']}]: status={resp.status_code}"
             )
             try:
-                assert_zero_db_queries(resp, resource=ep["path"], attempt="verify")
+                assert_zero_db_queries(
+                    resp, resource=ep["path"], attempt="verify", url=url,
+                    warmup_db_queries=ep.get("warmup_db"),
+                )
             except AssertionError as exc:
-                failures.append(str(exc))
+                failures.append(f"[{ep['label']}] {exc}")
 
         # Step 5: 再验证 Storefront katana（确认缓存未被污染）
         for ep in STOREFRONT_ENDPOINTS:
@@ -101,9 +107,12 @@ class TestUserJourneyCache:
                 f"Storefront verify failed [{ep['label']}]: status={resp.status_code}"
             )
             try:
-                assert_zero_db_queries(resp, resource=ep["path"], attempt="verify")
+                assert_zero_db_queries(
+                    resp, resource=ep["path"], attempt="verify", url=url,
+                    warmup_db_queries=ep.get("warmup_db"),
+                )
             except AssertionError as exc:
-                failures.append(str(exc))
+                failures.append(f"[{ep['label']}] {exc}")
 
         # Step 6: 验证 Pear SSR 页面（Playwright）
         for ep in PEAR_ENDPOINTS:
@@ -112,13 +121,21 @@ class TestUserJourneyCache:
                 f"SSR verify failed [{ep['label']}]: status={status}"
             )
             if count != 0:
-                failures.append(
-                    f"SSR cache regression detected!\n"
-                    f"Resource: {ep['path']}\n"
-                    f"Attempt: {ep['label']}-verify\n"
-                    f"Expected DB queries: 0\n"
-                    f"Actual DB queries:   {count}"
-                )
+                if count == -1:
+                    failures.append(
+                        f"SSR console capture failed!\n"
+                        f"Resource: {ep['path']}  [{ep['label']}]\n"
+                        f"  navigate_pear_page 返回 count=-1，console 未捕获到 x-db-query-count。\n"
+                        f"  请确认 Pear SSR 页面（{ep['path']}）是否仍在 console.log 中输出 x-db-query-count 响应头。"
+                    )
+                else:
+                    failures.append(
+                        f"SSR cache regression detected!\n"
+                        f"Resource: {ep['path']}\n"
+                        f"Attempt: {ep['label']}-verify\n"
+                        f"Expected DB queries: 0\n"
+                        f"Actual DB queries:   {count}"
+                    )
 
         # ==================== 汇总失败 ====================
         if failures:

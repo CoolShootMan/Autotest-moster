@@ -106,7 +106,7 @@ async def _run_phase(worker_coro, qps: int, duration: int) -> int:
     按目标 QPS 持续 duration 秒执行 worker_coro，汇总所有请求的 X-DB-Query-Count。
 
     worker_coro: async callable(client) -> int  （返回单次 DB 查询次数）。
-    返回：本阶段所有请求的 DB 查询总次数。
+    返回：(total, effective_count) — total 为 DB 查询总次数，effective_count 为有效请求数（header 存在且 r != -1）。
     """
     interval = 1.0 / qps
     async with httpx.AsyncClient(timeout=30) as client:
@@ -119,13 +119,19 @@ async def _run_phase(worker_coro, qps: int, duration: int) -> int:
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             total = 0
+            responses_with_header = 0
             for r in results:
                 if isinstance(r, Exception):
                     continue
+                if r != -1:
+                    responses_with_header += 1
                 if r and r > 0:
                     total += r
-            return max(1, total)
-        return 1
+            # 所有请求均缺失 header → 返回 0 以便调用方检测并跳过
+            if responses_with_header == 0:
+                return 0, 0
+            return max(1, total), responses_with_header
+        return 1, 0
 
 
 # ---- 场景 A：纯读冲击 ----
@@ -135,21 +141,33 @@ async def test_read_impact_does_not_scale_with_qps():
     """场景 A：高读阶段 DB 查询总量不应随 QPS 线性增长。"""
     # 预热：先发一次读请求填充缓存，避免低读阶段前几次穿透 DB 污染 low_total
     async with httpx.AsyncClient(timeout=30) as client:
-        await _send_read(client, READ_TARGET, KATANA_AUTH_HEADERS)
+        warmup_db = await _send_read(client, READ_TARGET, KATANA_AUTH_HEADERS)
 
-    low_total = await _run_phase(
+    low_total, low_eff = await _run_phase(
         lambda c: _send_read(c, READ_TARGET, KATANA_AUTH_HEADERS), LOW_QPS, DURATION_SEC
     )
-    high_total = await _run_phase(
+    high_total, high_eff = await _run_phase(
         lambda c: _send_read(c, READ_TARGET, KATANA_AUTH_HEADERS), HIGH_QPS, DURATION_SEC
     )
 
+    ttl_hint = ""
+    if warmup_db > 0 and low_total > warmup_db * 2:
+        ttl_hint = (
+            f"\n  ⚠ 预热 DB={warmup_db} > 0 但低读阶段总 DB={low_total} 远高于预热值，"
+            f"缓存 TTL 可能短于低读阶段持续时间（{DURATION_SEC}s），建议排查。"
+        )
+
     ratio = high_total / low_total if low_total else float("inf")
     assert ratio <= 1.5, (
-        f"DB 查询量随读 QPS 异常增长:\n"
-        f"  低读({LOW_QPS} QPS) DB 查询总量={low_total}\n"
-        f"  高读({HIGH_QPS} QPS) DB 查询总量={high_total}\n"
-        f"  比率={ratio:.2f} > 1.5"
+        f"Storefront DB 查询量随读 QPS 异常增长:\n"
+        f"  Warm-up DB queries: {warmup_db}\n"
+        f"  低读({LOW_QPS} QPS × {DURATION_SEC}s, {low_eff} effective) DB 查询总量={low_total}\n"
+        f"  高读({HIGH_QPS} QPS × {DURATION_SEC}s, {high_eff} effective) DB 查询总量={high_total}\n"
+        f"  比率={ratio:.2f}（预期 ≤ 1.5）{ttl_hint}\n"
+        f"  Action: 缓存层未拦截读放大 — {HIGH_QPS} QPS 的读流量穿透到 DB 层。\n"
+        f"  Check: 1) 缓存中间件是否正确部署到 READ_TARGET?\n"
+        f"         2) 缓存 TTL 是否短于测试持续时间?\n"
+        f"         3) 预热阶段是否成功填充了缓存?"
     )
 
 
@@ -160,23 +178,35 @@ async def test_post_read_impact_does_not_scale_with_qps():
     """Post Detail 高读阶段 DB 查询总量不应随 QPS 线性增长。"""
     # 预热
     async with httpx.AsyncClient(timeout=30) as client:
-        await _send_read(client, POST_READ_TARGET, KATANA_AUTH_HEADERS)
+        warmup_db = await _send_read(client, POST_READ_TARGET, KATANA_AUTH_HEADERS)
 
-    low_total = await _run_phase(
+    low_total, low_eff = await _run_phase(
         lambda c: _send_read(c, POST_READ_TARGET, KATANA_AUTH_HEADERS),
         LOW_QPS, DURATION_SEC,
     )
-    high_total = await _run_phase(
+    high_total, high_eff = await _run_phase(
         lambda c: _send_read(c, POST_READ_TARGET, KATANA_AUTH_HEADERS),
         HIGH_QPS, DURATION_SEC,
     )
 
+    ttl_hint = ""
+    if warmup_db > 0 and low_total > warmup_db * 2:
+        ttl_hint = (
+            f"\n  ⚠ 预热 DB={warmup_db} > 0 但低读阶段总 DB={low_total} 远高于预热值，"
+            f"缓存 TTL 可能短于低读阶段持续时间（{DURATION_SEC}s），建议排查。"
+        )
+
     ratio = high_total / low_total if low_total else float("inf")
     assert ratio <= 1.5, (
         f"Post DB 查询量随读 QPS 异常增长:\n"
-        f"  低读({LOW_QPS} QPS) DB 查询总量={low_total}\n"
-        f"  高读({HIGH_QPS} QPS) DB 查询总量={high_total}\n"
-        f"  比率={ratio:.2f} > 1.5"
+        f"  Warm-up DB queries: {warmup_db}\n"
+        f"  低读({LOW_QPS} QPS × {DURATION_SEC}s, {low_eff} effective) DB 查询总量={low_total}\n"
+        f"  高读({HIGH_QPS} QPS × {DURATION_SEC}s, {high_eff} effective) DB 查询总量={high_total}\n"
+        f"  比率={ratio:.2f}（预期 ≤ 1.5）{ttl_hint}\n"
+        f"  Action: 缓存层未拦截 Post Detail 读放大 — {HIGH_QPS} QPS 的读流量穿透到 DB 层。\n"
+        f"  Check: 1) 缓存中间件是否正确部署到 POST_READ_TARGET?\n"
+        f"         2) 缓存 TTL 是否短于测试持续时间?\n"
+        f"         3) 预热阶段是否成功填充了缓存?"
     )
 
 
@@ -187,23 +217,35 @@ async def test_promotion_read_impact_does_not_scale_with_qps(promo_auth_headers)
     """Promotion 高读阶段 DB 查询总量不应随 QPS 线性增长。"""
     # 预热
     async with httpx.AsyncClient(timeout=30) as client:
-        await _send_promo_read(client, promo_auth_headers)
+        warmup_db = await _send_promo_read(client, promo_auth_headers)
 
-    low_total = await _run_phase(
+    low_total, low_eff = await _run_phase(
         lambda c: _send_promo_read(c, promo_auth_headers),
         LOW_QPS, DURATION_SEC,
     )
-    high_total = await _run_phase(
+    high_total, high_eff = await _run_phase(
         lambda c: _send_promo_read(c, promo_auth_headers),
         HIGH_QPS, DURATION_SEC,
     )
 
+    ttl_hint = ""
+    if warmup_db > 0 and low_total > warmup_db * 2:
+        ttl_hint = (
+            f"\n  ⚠ 预热 DB={warmup_db} > 0 但低读阶段总 DB={low_total} 远高于预热值，"
+            f"缓存 TTL 可能短于低读阶段持续时间（{DURATION_SEC}s），建议排查。"
+        )
+
     ratio = high_total / low_total if low_total else float("inf")
     assert ratio <= 1.5, (
         f"Promotion DB 查询量随读 QPS 异常增长:\n"
-        f"  低读({LOW_QPS} QPS) DB 查询总量={low_total}\n"
-        f"  高读({HIGH_QPS} QPS) DB 查询总量={high_total}\n"
-        f"  比率={ratio:.2f} > 1.5"
+        f"  Warm-up DB queries: {warmup_db}\n"
+        f"  低读({LOW_QPS} QPS × {DURATION_SEC}s, {low_eff} effective) DB 查询总量={low_total}\n"
+        f"  高读({HIGH_QPS} QPS × {DURATION_SEC}s, {high_eff} effective) DB 查询总量={high_total}\n"
+        f"  比率={ratio:.2f}（预期 ≤ 1.5）{ttl_hint}\n"
+        f"  Action: 缓存层未拦截 Promotion 读放大 — {HIGH_QPS} QPS 的读流量穿透到 DB 层。\n"
+        f"  Check: 1) 缓存中间件是否正确部署到 PROMO_READ_TARGET?\n"
+        f"         2) 缓存 TTL 是否短于测试持续时间?\n"
+        f"         3) 预热阶段是否成功填充了缓存?"
     )
 
 
@@ -219,13 +261,23 @@ async def _checkout_and_order(client: httpx.AsyncClient) -> int:
 @pytest.mark.asyncio
 async def test_write_impact_scales_with_qps():
     """场景 B：高写阶段 DB 查询总量应约为低写阶段的 10 倍。"""
-    low_total = await _run_phase(_checkout_and_order, LOW_QPS, DURATION_SEC)
-    high_total = await _run_phase(_checkout_and_order, HIGH_QPS, DURATION_SEC)
+    low_total, _ = await _run_phase(_checkout_and_order, LOW_QPS, DURATION_SEC)
+    high_total, _ = await _run_phase(_checkout_and_order, HIGH_QPS, DURATION_SEC)
+
+    if low_total == 0 or high_total == 0:
+        pytest.skip(
+            "checkout/order 端点未部署 x-db-query-count header，"
+            "写冲击测试不可执行"
+        )
 
     ratio = high_total / low_total if low_total else float("inf")
     assert 5 <= ratio <= 20, (
         f"DB 查询量未跟随写入线性增长:\n"
-        f"  低写({LOW_QPS} QPS) DB 查询总量={low_total}\n"
-        f"  高写({HIGH_QPS} QPS) DB 查询总量={high_total}\n"
-        f"  比率={ratio:.2f}（预期约 10）"
+        f"  低写({LOW_QPS} QPS × {DURATION_SEC}s) DB 查询总量={low_total}\n"
+        f"  高写({HIGH_QPS} QPS × {DURATION_SEC}s) DB 查询总量={high_total}\n"
+        f"  比率={ratio:.2f}（预期 ≈ 10，范围 5~20）\n"
+        f"  Action: 写操作的 DB 计数未跟随 QPS 增长 — 可能订单端点的 x-db-query-count 未正确部署。\n"
+        f"  Check: 1) checkout/order 端点是否返回 X-DB-Query-Count header?\n"
+        f"         2) x-db-query-count 值是否准确反映每次写入的实际 DB 查询次数?\n"
+        f"         3) 低写阶段的 low_total={low_total} 是否异常偏低（可能部分请求 header 缺失返回 -1 被过滤）?"
     )

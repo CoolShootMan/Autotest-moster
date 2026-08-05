@@ -43,8 +43,13 @@ class TestPostConcurrentRead:
 
         assert penetration_count <= 1, (
             f"Post cache regression under concurrency!\n"
-            f"Resource: {POST_PATH}\n"
-            f"Concurrent requests: {CONCURRENT_COUNT}\n"
-            f"Penetrations (index, db_queries): {penetrations}\n"
-            f"Expected ≤ 1 requests to hit DB, but {penetration_count} bypassed cache."
+            f"  Endpoint: GET {url}\n"
+            f"  Total requests: {CONCURRENT_COUNT}\n"
+            f"  Penetrations: {penetration_count}/{CONCURRENT_COUNT}\n"
+            f"  Penetration details (index, x-db-query-count): {[(i, q) for i, q in penetrations]}\n"
+            f"  Expected: ≤ 1 request to hit DB, got {penetration_count}.\n"
+            f"  Action: {penetration_count} concurrent requests bypassed cache.\n"
+            f"  Check: 1) Is the cache lock/mutex properly implemented for this endpoint?\n"
+            f"         2) Are concurrent warm-up requests serialized to avoid cache stampede?\n"
+            f"         3) Is the cache populate atomic (first writer wins, rest read from cache)?"
         )

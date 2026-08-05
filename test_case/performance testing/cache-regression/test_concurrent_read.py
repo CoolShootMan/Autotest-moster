@@ -4,6 +4,8 @@ KAT-11756 扩展场景：并发读取缓存击穿检测（katana API）。
 验证 katana storefront API 在并发场景下的缓存行为：
 - 预热后并发读：绝大多数请求应命中缓存（DB=0）。
 """
+import collections
+import time
 import pytest
 import asyncio
 from conftest import (
@@ -29,6 +31,7 @@ class TestConcurrentRead:
         # 预热
         resp_warm = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
         assert resp_warm.status_code == 200, f"Warm-up failed: {resp_warm.status_code}"
+        warmup_db = get_db_queries(resp_warm)
 
         # 并发读
         async def read_and_check(i: int):
@@ -38,16 +41,31 @@ class TestConcurrentRead:
             return i, db_queries
 
         tasks = [read_and_check(i) for i in range(CONCURRENT_COUNT)]
+        t0 = time.monotonic()
         results = await asyncio.gather(*tasks)
+        t1 = time.monotonic()
 
         # 统计 DB>0 的请求（允许最多 1 次穿透）
         penetrations = [(i, q) for i, q in results if q > 0]
         penetration_count = len(penetrations)
 
+        # 按 DB 查询值分组汇总（如 "2 queries × 10 requests"）
+        dist_counter = collections.Counter(q for _, q in results)
+        dist_summary = " | ".join(
+            f"{q} queries × {cnt} requests" for q, cnt in sorted(dist_counter.items())
+        )
+
         assert penetration_count <= 1, (
             f"Cache regression under concurrency!\n"
-            f"Resource: {STORE_PATH}\n"
-            f"Concurrent requests: {CONCURRENT_COUNT}\n"
-            f"Penetrations (index, db_queries): {penetrations}\n"
-            f"Expected ≤ 1 requests to hit DB, but {penetration_count} bypassed cache."
+            f"  Endpoint: GET {url}\n"
+            f"  Warm-up DB queries: {warmup_db}\n"
+            f"  Total requests: {CONCURRENT_COUNT}\n"
+            f"  Penetrations: {penetration_count}/{CONCURRENT_COUNT}\n"
+            f"  DB query distribution: {dist_summary}\n"
+            f"  Concurrent request timing: {t1 - t0:.2f}s\n"
+            f"  Expected: ≤ 1 request to hit DB, got {penetration_count}.\n"
+            f"  Action: {penetration_count} concurrent requests bypassed cache.\n"
+            f"  Check: 1) Is the cache lock/mutex properly implemented for this endpoint?\n"
+            f"         2) Are concurrent warm-up requests serialized to avoid cache stampede?\n"
+            f"         3) Is the cache populate atomic (first writer wins, rest read from cache)?"
         )

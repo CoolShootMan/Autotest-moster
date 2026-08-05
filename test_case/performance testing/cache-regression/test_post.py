@@ -119,9 +119,10 @@ class TestPostCache:
     @pytest.mark.asyncio
     async def test_ssr_consecutive_reads_hit_cache(self, pear_context):
         """SSR Post Detail 连续两次读取 — 第二次应命中缓存"""
-        from conftest import navigate_pear_page
+        from conftest import navigate_pear_page, PEAR_BASE_URL
 
         path = "/resident/post/11756"
+        full_url = f"{PEAR_BASE_URL}{path}"
 
         # 预热：首次加载，触发缓存填充
         count1, status1 = await navigate_pear_page(pear_context, path)
@@ -130,4 +131,23 @@ class TestPostCache:
         # 验证：二次加载，应命中缓存
         count2, status2 = await navigate_pear_page(pear_context, path)
         assert status2 == 200, f"SSR verify failed: status={status2}"
-        assert count2 == 0, f"SSR cache regression: expected DB=0, got DB={count2}"
+        if count2 == -1:
+            assert False, (
+                f"SSR console capture failed for {full_url}.\n"
+                f"  Verify: 1) Pear SSR page logs x-db-query-count to console,\n"
+                f"          2) Playwright console listener is attached before page.goto(),\n"
+                f"          3) Console msg.args structure matches expected format (args[5] as response headers dict).\n"
+                f"          4) 请确认 Pear SSR 页面（{path}）是否仍在 console.log 中输出 x-db-query-count 响应头；"
+                f"供参考：storefront SSR（/resident）已验证可捕获，若仅 post-detail 失败，需检查该页面 SSR 渲染阶段是否调用了 console.log。"
+            )
+        assert count2 == 0, (
+            f"SSR cache regression detected!\n"
+            f"  Endpoint: GET {full_url}\n"
+            f"  Phase: verify (2nd page load after warm-up)\n"
+            f"  Expected: x-db-query-count = 0\n"
+            f"  Actual:   x-db-query-count = {count2}\n"
+            f"  Action: This SSR page leaked {count2} DB queries on a supposed cache hit.\n"
+            f"  Check: 1) Is the cache middleware deployed for this SSR route?\n"
+            f"         2) Is the cache TTL shorter than the interval between warm-up and verify?\n"
+            f"         3) Did the warm-up page load properly populate the cache?"
+        )
