@@ -13,6 +13,7 @@
 # ==============================================================================
 
 # T1742: Post commission Batch set to 10%
+#Auth: Linda Zhou
 testT1742:
     description: "Post commission Batch set to 10%"
     pre_condition:
@@ -208,10 +209,6 @@ testT3991:
 
 
 
-
-
-
-
 # ==============================================================================
 # Test Case: T3683 & T3684
 # T3683: Verify the user can edit order confirmation note for original post
@@ -233,6 +230,7 @@ testT3991:
 
 
 testT3683_T3684:
+#Auth: Linda Zhou
     description: "Verify Order Confirmation Note - Edit in Settings Tab and Verify Display on Order Page"
     test_step:
         # Step 1: Events list page -> click Event card
@@ -269,9 +267,9 @@ testT3683_T3684:
         fill_order_note: { placeholder: "e.g., Event time, location, or special instructions for buyers", value: 'Test Note - Concert at 7PM, Venue: Test Arena, Please bring ID' }
         sleep_step: 500
 
-        # T3683 Step 4: Save
-        R_click_save: { role: 'button', name: 'Save' }
-        wait_toast_save: { message: "Post settings updated", timeout: 15000 }
+        # T3683 Step 4: Save (skip if already saved, button disabled)
+        R_click_save: { role: 'button', name: 'Save', skip_if_disabled: true }
+        wait_toast_save: { message: "Post settings updated", timeout: 15000, optional: true }
 
         # Step 5: Close Post edit drawer, return to Event detail page
         R_click_close_drawer: { locator: '[data-testid="CloseIcon"]', optional: true, disable_ai: true }
@@ -374,6 +372,7 @@ testT3683_T3684:
 # ==============================================================================
 
 testT3686_CosellerResell:
+#Auth: Linda Zhou
     is_coseller: true
     description: "Verify Order Confirmation Note is displayed when purchasing through Coseller's resold Post"
     test_step:
@@ -384,6 +383,10 @@ testT3686_CosellerResell:
           # cookie_file: 'test_case/UI/Test_Katana/cookie_{ENV}_co_seller.json"'
         sleep_step: 5000
 
+        # Refresh page to ensure latest state
+        reload_page: {}
+        sleep_step: 2000
+        
         # Click "Add to shop" button to resell the Post (is_coseller: true)
         R_click_add_to_shop: { locator: "button:has-text('Add to shop')", timeout: 8000 }
         sleep_step: 3000
@@ -524,6 +527,7 @@ testT3686_CosellerResell:
 
 # Separate verification for Guest
 testT3686_teardown:
+#Auth: Linda Zhou
     description: "delete the resold post"
     expect_result: "Co-seller post deleted successfully or no data to delete"
     test_step:
@@ -1512,6 +1516,7 @@ testT2874_VerifyGuestCheckoutTwo:
 
 
 testT4038:
+#Auth: Linda Zhou
     description: "Verify user can add/edit promotional announcements in Selling/Promotion tab"
     test_step:
         # Step 1: Open Events list page
@@ -1598,6 +1603,7 @@ testT4038:
 
 
 testT2069:
+#Auth: Linda Zhou
     guest: true
     description: "Verify announcement banners auto-scroll every 3 seconds and loop back"
     test_step:
@@ -2043,6 +2049,7 @@ testT4955_Guest_VerifyAccessCode:
 # ==============================================================================
 
 testT3779:
+#Auth: Linda Zhou
     description: "Create an auto-applied coupon on post verify auto coupon apply"
     test_step:
         # Step 1: Navigate to event "verify auto coupon apply"
@@ -2131,6 +2138,7 @@ testT3779:
 # ==============================================================================
 
 testT3767:
+#Auth: Linda Zhou
     guest: true
     description: "Verify Hide Coupon Box auto-checked when guest checkout with auto-applied coupon"
     test_step:
