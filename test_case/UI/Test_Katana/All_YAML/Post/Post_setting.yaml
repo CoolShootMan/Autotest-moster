@@ -151,7 +151,11 @@ testT3991:
         fill_post_title: { role: 'textbox', name: 'title', value: 'testT3991' }
         
         click_advanced_tab: { role: 'tab', name: 'Settings' }
-        
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         # Must assertion 1: Verify advanced settings are visible
         verify_allow_copy_visible: { text: "Allow others to copy" }
         
@@ -258,6 +262,10 @@ testT3683_T3684:
         # T3683 Step 1: Wait for Settings tab to load
         wait_advanced_loaded: { role: 'tab', name: 'Settings', timeout: 8000 }
         sleep_step: 1000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         # T3683 Step 2: Click toggle to enable Order confirmation note (only when OFF -> ON)
         R_click_order_note_toggle: { locator: 'input[name="isOrderConfirmationNoteEnabled"]', skip_if_checked: true }
@@ -450,6 +458,10 @@ testT3686_CosellerResell:
         # Step 3.3: Switch to Settings tab
         R_click_setting_tab: { role: 'tab', name: 'Settings' }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         # Step 3.4: Verify the note content is displayed and matches original (implies toggle is ON)
         verify_note_content: { text: 'Test Note - Concert at 7PM, Venue: Test Arena, Please bring ID' }
@@ -712,6 +724,10 @@ testT2830_VerifyPartner:
         R_click_setting_tab: { role: "tab", name: "Settings" }
         sleep_step: 2000
 
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         # Step 5: Check hide in store
         check_hide_in_store: { locator: "input[name='hideInStore']" }
         save_html_partner_before: { name: "debug_partner_before_update" }
@@ -787,6 +803,10 @@ testT2830_VerifyGuest:
         # Step 5: Click Seting tab
         R_click_setting_tab_reset: { role: "tab", name: "Settings" }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         # Step 6: Uncheck hideInStore
         uncheck_hide_in_store: { locator: "input[name='hideInStore']", checked: false }
@@ -1004,6 +1024,10 @@ testT4735_VerifyPartner:
         R_click_setting_tab: { role: "tab", name: "Settings" }
         sleep_step: 2000
 
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         # Check enableRedirectUrl checkbox
         check_enable_redirect: { locator: "input[name='enableRedirectUrl']" }
         sleep_step: 2000
@@ -1112,6 +1136,10 @@ testT4735_VerifyGuest_YesPlease:
         R_click_setting_tab_teardown: { role: "tab", name: "Settings" }
         sleep_step: 2000
 
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         # Uncheck enableRedirectUrl checkbox to disable redirect
         uncheck_enable_redirect: { locator: "input[name='enableRedirectUrl']", checked: false }
         sleep_step: 1000
@@ -1144,6 +1172,10 @@ testT2515_SetLimit_WithVariant:
         # Step 4: Click Seting tab
         R_click_setting_tab: { role: "tab", name: "Settings" }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         # Step 3: Enable "Purchase quantity limit" toggle
         check_purchase_limit: { locator: "input[name='isPurchaseQuantityLimited']" }
@@ -1300,6 +1332,10 @@ testT2515_VerifyDisabled_WithVariant:
         # Step 5: Click Seting tab
         R_click_setting_tab_teardown: { role: "tab", name: "Settings" }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         # Step 6: Disable "Purchase quantity limit" toggle
         uncheck_purchase_limit: { locator: "input[name='isPurchaseQuantityLimited']", checked: false }
@@ -1892,6 +1928,10 @@ testT4955_Partner_SetPaymentRestriction:
         R_click_setting_tab: { role: "tab", name: "Settings" }
         sleep_step: 2000
 
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         # Step 5: Check enablePaymentRestriction checkbox
         check_payment_restriction: { locator: "input[name='enablePaymentRestriction']" }
         sleep_step: 1000
@@ -2011,6 +2051,10 @@ testT4955_Guest_VerifyAccessCode:
         # Step 5: Click Seting tab
         R_click_setting_tab_teardown: { role: "tab", name: "Settings" }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         # Step 6: Uncheck enablePaymentRestriction checkbox to disable
         uncheck_payment_restriction: { locator: "input[name='enablePaymentRestriction']", checked: false }
@@ -2260,6 +2304,11 @@ testT2281:
         # Step 3: Click Setting tab and enable allowExpire
         R_click_setting_tab: { role: 'tab', name: 'Settings' }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         check_allow_expire: { locator: 'input[name="allowExpire"]' }
         sleep_step: 2000
 
@@ -2297,6 +2346,11 @@ testT2281:
         # Step 11: Click Seting tab and uncheck allowExpire
         R_click_setting_tab_2: { role: 'tab', name: 'Settings' }
         sleep_step: 2000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        R_click_advanced_settings_2: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
+
         uncheck_allow_expire: { locator: 'input[name="allowExpire"]', checked: false }
         sleep_step: 5000
 
@@ -2336,6 +2390,10 @@ testT2537:
 
         click_setting_tab: { role: 'tab', name: 'Settings' }
         sleep_step: 1000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        click_advanced_settings: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         check_access_restricted: { locator: 'input[name="isAccessRestricted"]' }
         sleep_step: 1000
@@ -2381,6 +2439,10 @@ testT2537:
 
         click_setting_tab_2: { role: 'tab', name: 'Settings' }
         sleep_step: 1000
+
+        # Expand "Advanced settings" accordion (collapsed by default)
+        click_advanced_settings_2: { locator: "text=Advanced settings", exact: true }
+        sleep_step: 800
 
         click_manage: { role: 'button', name: 'Manage' }
         sleep_step: 1000
