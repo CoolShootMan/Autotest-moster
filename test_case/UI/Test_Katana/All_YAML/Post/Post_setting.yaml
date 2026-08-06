@@ -149,14 +149,10 @@ testT3991:
         
         click_content_tab: { role: 'tab', name: 'Content' }
         fill_post_title: { role: 'textbox', name: 'title', value: 'testT3991' }
-        
         click_advanced_tab: { role: 'tab', name: 'Settings' }
-
         
-
         # Must assertion 1: Verify advanced settings are visible
         verify_allow_copy_visible: { text: "Allow others to copy" }
-        
         click_commerce_tab: { role: 'tab', name: 'Commerce' }
         click_add_product_cta: { test_id: 'enhance-button-cta' }
         click_product_img: { role: 'img', name: 'Image of Product', index: 0 }
@@ -165,22 +161,23 @@ testT3991:
         sleep_after_add_product: 1500
         
         # After modal state changes, check the product option (may be in modal or back to main page)
-        check_product_checkbox: { role: 'checkbox', index: 0}
+        click_product_checkbox: { role: 'checkbox', index: 0}
         sleep_after_check_product_checkbox: 1000
-
-
         click_save_btn_commerce: { role: 'button', name: 'Save' }
         sleep_before_confirm: 1000
         click_confirm_publish: { test_id: 'confirm-button' }
-        click_publish_btn: { role: 'button', name: 'Publish' }
-        sleep_after_publish: 3000
-        click_save_btn_1: { role: 'button', name: 'Save' }
+        click_add_cover_media: { role: 'button', name: 'Add cover media' }
+        click_products_media: { text: 'Products', exact: true }
+        click_media_img: { role: 'img', name: 'Image of Product', index: 0 }
+        click_done_btn_commerce: { role: 'button', name: 'Done' }
+        click_publish_btn: { role: 'button', name: 'Publish', index: 1 }
+        click_publish_btn_2: { role: 'button', name: 'Publish' }
+        click_apply_btn: { role: 'button', name: 'Apply' }
         sleep_after_save: 2000
         
         # Click the newly created Post to enter details
-        click_post_card: { role: 'button', name: 'Image of Product testT3991 $', index: 0 }
-        sleep_after_click_post: 3000
-        
+        click_post_card: { role: 'button', name: 'Image of Product', index: 0 }
+        sleep_after_click_post: 1500
         click_coselling_tab: { role: 'tab', name: 'Co-selling' }
         click_cosellers_tab: { role: 'tab', name: 'Co-sellers' }
         click_mui_btn: { role: 'button', name: 'Manually add co-sellers' }
@@ -198,7 +195,7 @@ testT3991:
         
         check_enable_downline_note: { locator: 'input[name="enableDownlineNote"]' }
         fill_note: { role: 'textbox', name: 'Enter a short message for', value: 'test_3991' }
-        click_apply_btn: { role: 'button', name: 'Apply' }
+        click_apply_btn_2: { role: 'button', name: 'Apply' }
         sleep_after_apply: 1000
         click_save_settings_btn: { role: 'button', name: 'Save' }
         sleep_after_save_settings: 3000
