@@ -67,7 +67,10 @@ def test_case(smokecases1, page: Page, browser: Browser, request):
         setattr(page, "_step_capture", step_capture)
         setattr(page, "_step_capture_mode", step_capture_mode)
     
-    allure_title(caseno)
+    # Append YAML description to the Allure title so the Behaviors list
+    # shows "testT3991: Verify that partner can ..." instead of a bare case id.
+    desc = (description or "").strip()
+    allure_title(f"{caseno}: {desc}" if desc else caseno)
     allure_step_no(f'description:{description}')
     allure_step_no(f'test_step:{str(test_step)}')
 
