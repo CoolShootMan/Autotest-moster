@@ -1368,7 +1368,10 @@ def wait_toast(page: Page, v: dict):
     import time
     message = v.get("message", "")
     timeout = v.get("timeout", 15000)
-    logger.info(f"wait_toast: waiting for '{message}' (timeout={timeout}ms)")
+    optional = v.get("optional", False)
+    if optional:
+        timeout = 2000  # short poll when toast is optional
+    logger.info(f"wait_toast: waiting for '{message}' (timeout={timeout}ms, optional={optional})")
 
     start = time.time()
     while time.time() - start < timeout / 1000.0:
@@ -1389,8 +1392,11 @@ def wait_toast(page: Page, v: dict):
                 pass
         time.sleep(0.3)
 
-    logger.warning(f"Toast '{message}' not found within {timeout}ms, continuing anyway...")
-    page.screenshot(path=f"warn_toast_{message[:20]}.png")
+    if optional:
+        logger.info(f"wait_toast optional: toast '{message}' not found, skipping.")
+    else:
+        logger.warning(f"Toast '{message}' not found within {timeout}ms, continuing anyway...")
+        page.screenshot(path=f"warn_toast_{message[:20]}.png")
 
 def drag_element(page: Page, v: dict):
     """

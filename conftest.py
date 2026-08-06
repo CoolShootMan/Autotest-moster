@@ -238,8 +238,13 @@ def pytest_generate_tests(metafunc):
                         if isinstance(v, dict):
                             v["__yaml_path__"] = yaml_path
                             all_argvalues.append({k: v})
-                            # Add yaml prefix to avoid id conflicts
-                            all_ids.append(f"{yaml_file}::{k}")
+                            # Add yaml prefix + short description slug to test ID for readability
+                            desc = v.get("description", "")
+                            if desc:
+                                slug = slugify(desc, max_length=40, word_boundary=True, separator="_")
+                                all_ids.append(f"{yaml_file}::{k}_{slug}")
+                            else:
+                                all_ids.append(f"{yaml_file}::{k}")
             else:
                 logger.error(f"YAML file not found at: {yaml_path}")
         
