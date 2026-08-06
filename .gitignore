@@ -159,3 +159,6 @@ data/*_step_verification.json
 data/*_test_cases_draft.md
 # === prefill runtime state (written by manual_event.py at runtime, do not commit) ===
 test_case/UI/Test_Katana/api/prefill_vars.json
+
+# === QA performance test debug
+test_case/output
