@@ -149,3 +149,13 @@ data/ones_*.json
 data/debug_*.png
 tools/_*.py
 /qa_workflow_requirements.md
+
+# === prefill_runner debug/temp artifacts (Apifox export residue, do not commit) ===
+test_case/UI/Test_Katana/api/tmp*.js
+# === local AI temp scripts at repo root (do not commit) ===
+/_*.py
+# === KAT case verification + draft artifacts (one-off, do not commit) ===
+data/*_step_verification.json
+data/*_test_cases_draft.md
+# === prefill runtime state (written by manual_event.py at runtime, do not commit) ===
+test_case/UI/Test_Katana/api/prefill_vars.json
