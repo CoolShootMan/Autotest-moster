@@ -356,7 +356,7 @@ def smart_check(page: Page, v: dict):
         logger.info(f"Checked '{target_name or target_locator}' via page-level.")
         return
     except Exception as e:
-        if "Clicking the checkbox did not change its state" in str(e) or "intercepts pointer events" in str(e):
+        if "Clicking the checkbox did not change its state" in str(e) or "intercepts pointer events" in str(e) or "Timeout" in type(e).__name__:
             try:
                 _mui_fallback(_get_el(page))
                 return
@@ -388,7 +388,7 @@ def smart_check(page: Page, v: dict):
                 logger.info(f"Optional check: element '{target_name or target_locator}' not found on page or modal, skipping.")
                 return
     except Exception as e2:
-        if "Clicking the checkbox did not change its state" in str(e2) or "intercepts pointer events" in str(e2):
+        if "Clicking the checkbox did not change its state" in str(e2) or "intercepts pointer events" in str(e2) or "Timeout" in type(e2).__name__:
             try:
                 _mui_fallback(_get_el(active_modal))
                 return

@@ -6,17 +6,27 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
   description: "Create a complete form"
   test_step:
     open: "{BASE_URL}/autotestshop"
-    #sleep_open: 3000
+    sleep_open: 3000
 
     #    R_click_add_my_form_module: { locator: '.shop-text-color:has-text("MyForm")'}
     #    sleep_click_add_my_form: 1000
+
+    # R_click_add_new_form:
+    #   {
+    #     role: "button",
+    #     locator: 'div:has(p:has-text("MyForm")) + div button:data-testid("AddIcon")',
+    #     index: 1,
+    #     quick: true,
+    #   }
+    # sleep_add: 3000
+
     R_click_add_new_form:
-      {
-        role: "button",
-        locator: 'div:has(p:has-text("MyForm")) + div button:has-text("Add new")',
-        quick: true,
-      }
-    sleep_add: 3000
+      { locator: "[data-testid='AddIcon']", index: 1, quick: true }
+    sleep_add: 1000
+
+    R_click_Create_form:
+      { locator: "[data-testid='RightFillIcon']", index: 2, quick: true }
+    sleep_add: 1000
 
     fill_title:
       { role: "textbox", name: "Enter a title", value: "Partner_create_form" }
@@ -145,8 +155,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_1: { role: "combobox" }
     sleep_click_8: 50
     R_click_select_item_8: { role: "option", name: "Social" }
-    R_click_social_combo_1: { role: "combobox", index: 1, quick: true }
-    R_click_insta: { role: "option", name: "Instagram", quick: true }
+    R_click_insta: { role: "button", name: "Instagram", quick: true }
+    fill_field_title_instagram: { role: "textbox", name: "Enter title of the field", value: "instagram" }
     R_click_add_9: { role: "button", name: "Add", quick: true }
 
     # 10. Social - Facebook
@@ -156,8 +166,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_2: { role: "combobox" }
     sleep_click_9: 50
     R_click_select_item_9: { role: "option", name: "Social" }
-    R_click_social_combo_2: { role: "combobox", index: 1, quick: true }
-    R_click_fb: { role: "option", name: "Facebook", quick: true }
+    R_click_fb: { role: "button", name: "Facebook", quick: true }
+    fill_field_title_facebook: { role: "textbox", name: "Enter title of the field", value: "facebook" }
     R_click_add_10: { role: "button", name: "Add", quick: true }
 
     # 11. Social - TikTok
@@ -167,8 +177,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_3: { role: "combobox" }
     sleep_click_10: 50
     R_click_select_item_10: { role: "option", name: "Social" }
-    R_click_social_combo_3: { role: "combobox", index: 1, quick: true }
-    R_click_tiktok: { role: "option", name: "TikTok", quick: true }
+    R_click_tiktok: { role: "button", name: "TikTok", quick: true }
+    fill_field_title_tiktok: { role: "textbox", name: "Enter title of the field", value: "tiktok" }
     R_click_add_11: { role: "button", name: "Add", quick: true }
 
     # 12. Social - X
@@ -178,8 +188,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_4: { role: "combobox" }
     sleep_click_11: 50
     R_click_select_item_11: { role: "option", name: "Social" }
-    R_click_social_combo_4: { role: "combobox", index: 1, quick: true }
-    R_click_x: { role: "option", name: "X", exact: true, quick: true }
+    R_click_x: { role: "button", name: "X", exact: true, quick: true }
+    fill_field_title_x: { role: "textbox", name: "Enter title of the field", value: "x" }
     R_click_add_12: { role: "button", name: "Add", quick: true }
 
     # 13. Social - YouTube
@@ -189,8 +199,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_5: { role: "combobox" }
     sleep_click_12: 50
     R_click_select_item_12: { role: "option", name: "Social" }
-    R_click_social_combo_5: { role: "combobox", index: 1, quick: true }
-    R_click_yt: { role: "option", name: "YouTube", quick: true }
+    R_click_yt: { role: "button", name: "YouTube", quick: true }
+    fill_field_title_youtube: { role: "textbox", name: "Enter title of the field", value: "youtube" }
     R_click_add_13: { role: "button", name: "Add", quick: true }
 
     # 14. Social - Linkedin
@@ -200,8 +210,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_6: { role: "combobox" }
     sleep_click_13: 50
     R_click_select_item_13: { role: "option", name: "Social" }
-    R_click_social_combo_6: { role: "combobox", index: 1, quick: true }
-    R_click_linkedin: { role: "option", name: "Linkedin", quick: true }
+    R_click_linkedin: { role: "button", name: "Linkedin", quick: true }
+    fill_field_title_linkedin: { role: "textbox", name: "Enter title of the field", value: "linkedin" }
     R_click_add_14: { role: "button", name: "Add", quick: true }
 
     # 15. Social - Threads (Unrequired)
@@ -211,8 +221,8 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
     R_click_social_7: { role: "combobox" }
     sleep_click_14: 50
     R_click_select_item_14: { role: "option", name: "Social" }
-    R_click_social_combo_7: { role: "combobox", index: 1, quick: true }
-    R_click_threads: { role: "option", name: "Threads", quick: true }
+    R_click_threads: { role: "button", name: "Threads", quick: true }
+    fill_field_title_threads: { role: "textbox", name: "Enter title of the field", value: "threads" }
     check_required: { role: "checkbox", name: "Required", checked: false }
     R_click_add_15: { role: "button", name: "Add", quick: true }
 
@@ -242,7 +252,7 @@ testPartner_create_form: # [LAST: BROKEN 2026-05-06]
 
     # Finalization
     R_click_preview:
-      { role: "button", name: "Preview form", exact: true, quick: true }
+      { locator: "[data-testid='VisibilityOutlinedIcon']", index: 1, quick: true }
     sleep_preview: 1000
     R_click_close_preview:
       { role: "button", name: "Close", exact: true, quick: true }

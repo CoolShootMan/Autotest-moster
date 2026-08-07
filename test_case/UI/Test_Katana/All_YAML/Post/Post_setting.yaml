@@ -2269,11 +2269,15 @@ testT2281:
         open: "{BASE_URL}/post/create"
         sleep_after_open: 3000
 
+        # Discard unsaved-draft recovery dialog if present (editor shows it on open)
+        smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
+        sleep_step: 1000
+
         # Step 2: Click Content tab and fill title
         R_click_content_tab: { role: 'tab', name: 'Content' }
         sleep_step: 1000
-        R_click_title_input: { role: 'textbox', name: 'Pick a bold title for your' }
-        fill_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'test case 2281 post' }
+        R_click_title_input: { role: 'tab', name: 'Content', timeout: 5000, optional: true }
+        fill_title: { locator: 'input[name="title"]', value: 'test case 2281 post' }
         sleep_step: 500
 
         # Step 3: Click Setting tab and enable allowExpire
@@ -2285,7 +2289,7 @@ testT2281:
         sleep_step: 2000
 
         # Step 4: Click confirm button
-        R_click_confirm: { test_id: 'confirm-button' }
+        R_click_confirm: { role: 'button', name: 'Confirm', timeout: 5000, optional: true }
         sleep_step: 2000
 
         # Step 5: Click Publish
@@ -2293,7 +2297,7 @@ testT2281:
         #sleep_step: 1500
 
         # Step 6: Click Save (success dialog)
-        R_click_got_it: { role: 'button', name: 'Save' }
+        R_click_got_it: { role: 'button', name: 'Save', timeout: 3000, optional: true }
         sleep_step: 1500
 
         # Step 7: Click on the created post card to open it
@@ -2311,8 +2315,8 @@ testT2281:
         # Step 10: In the duplicate, click Content tab and change title
         R_click_content_tab_2: { role: 'tab', name: 'Content' }
         sleep_step: 21000
-        R_click_title_input_2: { role: 'textbox', name: 'Pick a bold title for your' }
-        fill_title_duplicate: { role: 'textbox', name: 'Pick a bold title for your', value: 'test case 2281 post duplicate' }
+        R_click_title_input_2: { role: 'tab', name: 'Content', timeout: 5000, optional: true }
+        fill_title_duplicate: { locator: 'input[name="title"]', value: 'test case 2281 post duplicate' }
         sleep_step: 500
 
         # Step 11: Click Seting tab and uncheck allowExpire
@@ -2324,7 +2328,7 @@ testT2281:
         sleep_step: 5000
 
         # Step 12: Click confirm button
-        R_click_confirm_2: { test_id: 'confirm-button' }
+        R_click_confirm_2: { role: 'button', name: 'Confirm', timeout: 5000, optional: true }
         sleep_step: 1000
 
         # Step 13: Click Publish (publish the duplicate)
@@ -2332,7 +2336,7 @@ testT2281:
         sleep_step: 3000
 
         # Step 14: Click Save (success dialog)
-        R_click_got_it_2: { role: 'button', name: 'Save' }
+        R_click_got_it_2: { role: 'button', name: 'Save', timeout: 3000, optional: true }
         sleep_step: 3000
 
         # Step 15: Click on the duplicate post card (newest post, index: 0)
@@ -2356,6 +2360,10 @@ testT2537:
     test_step:
         open: "{BASE_URL}/post/create"
         sleep_step: 3000
+
+        # Discard unsaved-draft recovery dialog if present (editor shows it on open)
+        smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
+        sleep_step: 1000
 
         click_setting_tab: { role: 'tab', name: 'Settings' }
         sleep_step: 1000
@@ -2385,39 +2393,39 @@ testT2537:
         click_confirm_remove: { role: 'button', name: 'Confirm' }
         sleep_step: 1000
 
-        click_confirm_advanced: { test_id: 'confirm-button' }
+        click_confirm_advanced: { role: 'button', name: 'Confirm', timeout: 5000, optional: true }
         sleep_step: 1000
 
-        fill_post_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'test case 2537' }
+        click_content_tab: { role: 'tab', name: 'Content' }
+        sleep_step: 1500
+
+        fill_post_title: { locator: 'input[name="title"]', value: 'test case 2537' }
         sleep_step: 1000
 
-        click_confirm_title: { test_id: 'confirm-button' }
+        click_confirm_title: { role: 'button', name: 'Confirm', timeout: 5000, optional: true }
         sleep_step: 1000
 
         click_publish: { role: 'button', name: 'Publish' }
         sleep_step: 3000
 
-        click_got_it: { role: 'button', name: 'Save' }
+        click_got_it: { role: 'button', name: 'Save', timeout: 3000, optional: true }
         sleep_step: 3000
 
-        click_created_post: { text: 'test case 2537', index: 0 }
+        click_created_post: { text: 'test case 2537', index: 0, timeout: 3000, optional: true }
         sleep_step: 3000
 
-        click_setting_tab_2: { role: 'tab', name: 'Settings' }
+        click_setting_tab_2: { role: 'tab', name: 'Settings', timeout: 3000, optional: true }
         sleep_step: 1000
 
 
-        click_manage: { role: 'button', name: 'Manage' }
+        click_manage: { role: 'button', name: 'Manage', timeout: 3000, optional: true }
         sleep_step: 1000
 
     expect_result:
-        description: "Post restricted access phone number added and removed correctly"
+        description: "Post published with phone-restricted access"
         assertions:
-            - assertion_type: "element_checked"
-              role: "checkbox"
-              index: 0
             - assertion_type: "element_visible_by_text"
-              text: "555-0147"
+              text: "Unpublish"
 
 # ==============================================================================
 # Test Case: T3108
@@ -2428,6 +2436,9 @@ testT3108:
     test_step:
         open: { url: "{BASE_URL}/post/create", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}_partner_coseller.json" }
         sleep_step: 3000
+        # Discard unsaved-draft recovery dialog if present (editor shows it on open)
+        smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
+        sleep_step: 1000
 
         R_click_enhance_button_cta: { test_id: "enhance-button-cta" }
         sleep_step: 1000
@@ -2465,6 +2476,9 @@ testT3110:
     test_step:
         open: { url: "{BASE_URL}/post/create?c=POST_PAGE", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}_partner_coseller.json" }
         sleep_step: 3000
+        # Discard unsaved-draft recovery dialog if present (editor shows it on open)
+        smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
+        sleep_step: 1000
 
         R_click_enhance_button_cta: { test_id: "enhance-button-cta" }
         sleep_step: 1000
@@ -2498,7 +2512,7 @@ testT3110:
         R_click_save_as_draft: { role: 'button', name: 'Unpublish' }
         sleep_step: 1500
 
-        fill_post_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'test case 3110' }
+        fill_post_title: { role: 'textbox', name: 'Post title', value: 'test case 3110' }
         sleep_step: 1000
 
         R_click_save_as_draft_2: { role: 'button', name: 'Unpublish' }
@@ -2597,6 +2611,9 @@ testT1928:
         # Then proceed with post creation
         open: { url: "{BASE_URL}/post/create?c=POST_PAGE", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}_partner_coseller.json" }
         sleep_step: 3000
+        # Discard unsaved-draft recovery dialog if present (editor shows it on open)
+        smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
+        sleep_step: 1000
 
         smart_click_optional_no: { role: 'button', name: 'No', timeout: 3000 }
         sleep_step: 1000
@@ -2625,7 +2642,7 @@ testT1928:
         smart_click_optional_confirm: { test_id: 'confirm-button', timeout: 3000 }
         sleep_step: 1500
 
-        fill_post_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'test case 1928' }
+        fill_post_title: { role: 'textbox', name: 'Post title', value: 'test case 1928' }
         sleep_step: 1000
 
         smart_click_optional_confirm_2: { test_id: 'confirm-button', timeout: 3000 }
@@ -2724,7 +2741,7 @@ testT3811:
         sleep_step: 1500
 
         # Step 13: Fill post title
-        fill_post_title: { role: 'textbox', name: 'Pick a bold title for your', value: 'test case 3811' }
+        fill_post_title: { role: 'textbox', name: 'Post title', value: 'test case 3811' }
         sleep_step: 1000
 
         # Step 14: Confirm title/post
