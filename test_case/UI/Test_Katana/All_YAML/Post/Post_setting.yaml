@@ -874,6 +874,10 @@ testT2834_VerifyPartner:
         sleep_step: 1000
         page_scroll: { y: 800, delay: 1500, steps: 3 }
         sleep_step: 1000
+        # Advanced settings for products.1 is collapsed by default; expand before toggling isFreeShipping
+        # (verified in browser 2026-08-10: collapsed -> input not in DOM; expand index 1 -> products.1.isFreeShipping appears)
+        R_click_expand_details: { test_id: "ExpandMoreIcon", index: 1 }
+        sleep_step: 1000
         check_free_shipping: { locator: 'input[name="products.1.isFreeShipping"]', checked: true }
 
         # Step 6: Save changes
@@ -1351,12 +1355,27 @@ testT2874_EnableDependentProducts:
         R_click_selling_tab: { role: "tab", name: "Selling" }
         sleep_step: 2000
 
-        # Step 5: Click Customize products
-        R_click_customize_products: { role: "button", name: "Customize products" }
+        # Step 5: Click Select products (enhance-button-cta) - the dependent-products checkbox lives in THIS dialog,
+        # NOT in the "Customize products" commission dialog (which only has commission/retail fields).
+        R_click_select_products: { test_id: "enhance-button-cta" }
         sleep_step: 5000
 
-        # Step 6: Click the checkbox for "Must be bought with another item"
-        R_click_dependent_checkbox: { locator: "//span[contains(text(),'Must be bought with another item')]/preceding::input[@type='checkbox'][1]" }
+        # Step 5.1: Add test_general_products (catalog product - has dependent-products / CTA fields).
+        # GA 001/002 are tickets and do NOT expose dependent-products.
+        fill_product_search: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
+        sleep_step: 500
+        press_search: { key: "Enter" }
+        sleep_step: 1500
+        click_product_card: { role: 'img', name: 'Image of Product' }
+        click_add_product_btn: { role: 'button', name: 'Add 3/20 product(s)' }
+        sleep_step: 1500
+
+        # Step 5.2: Expand the newly-added product's Advanced settings (added product sorts to index 0).
+        R_click_expand_details: { test_id: "ExpandMoreIcon", index: 0 }
+        sleep_step: 1000
+
+        # Step 6: Click the checkbox for "Must be bought with other items"
+        R_click_dependent_checkbox: { locator: "//span[contains(text(),'Must be bought with other items')]/preceding::input[@type='checkbox'][1]" }
         sleep_step: 2000
 
         # Step 7: In popup, click the product image (user confirmed: clicking image works)
@@ -1812,6 +1831,10 @@ testT5033_5034_VerifyPartner:
         sleep_step: 1000
         #page_scroll: { y: 800, delay: 1500, steps: 3 }
         # sleep_step: 1000
+        # Advanced settings collapsed by default; expand products.0 before toggling isCtaCustomized
+        # (verified in browser 2026-08-10: collapsed -> input not in DOM; expand index 0 -> products.0.isCtaCustomized appears)
+        R_click_expand_details_0: { test_id: "ExpandMoreIcon", index: 0 }
+        sleep_step: 1000
         check_cta_type_1: { locator: 'input[name="products.0.isCtaCustomized"]', checked: true }
         sleep_step: 500
         # Product 0: Click Buy now -> select View options
@@ -1820,17 +1843,26 @@ testT5033_5034_VerifyPartner:
         sleep_step: 500
         swipe: { x: 0, y: 500 }
         sleep_step: 500
+        # expand products.1 before toggling isCtaCustomized
+        R_click_expand_details_1: { test_id: "ExpandMoreIcon", index: 1 }
+        sleep_step: 1000
         check_cta_type_2: { locator: 'input[name="products.1.isCtaCustomized"]', checked: true }
         # Product 1: Click Buy now -> select Add to cart
         R_click_buy_now_1: { locator: 'div[role="combobox"]:has-text("Buy now")' }
         R_click_option_add_to_cart: { role: "option", name: "Add to cart" }
         sleep_step: 500
+        # expand products.2 before toggling isCtaCustomized
+        R_click_expand_details_2: { test_id: "ExpandMoreIcon", index: 2 }
+        sleep_step: 1000
         check_cta_type_3: { locator: 'input[name="products.2.isCtaCustomized"]', checked: true }
         # Product 2: Click Buy now -> select View Product
         R_click_buy_now_2: { locator: 'div[role="combobox"]:has-text("Buy now")' }
         sleep_step: 500
         R_click_option_view_product: { role: "option", name: "View Product" }
 
+        # expand products.3 before toggling isCtaCustomized
+        R_click_expand_details_3: { test_id: "ExpandMoreIcon", index: 3 }
+        sleep_step: 1000
         check_cta_type_4: { locator: 'input[name="products.3.isCtaCustomized"]', checked: true }
         verify_cta_type_4:
             text: 'Choose call-to-action type'
@@ -2560,7 +2592,7 @@ testT1928:
     description: "Verify customize price and catalog price update synchronization"
     test_step:
         # Create product logic first
-        open_dashboard: { url: "{BASE_URL}/sell/product/create", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}_partner_coseller.json" }
+        open_dashboard: { url: "{BASE_URL}/sell/product/create" }
         sleep_step_p1: 3500
         
         R_click_content_tab: { locator: "[data-testid='content']", index: 0 }
