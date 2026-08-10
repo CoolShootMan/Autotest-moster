@@ -1959,6 +1959,11 @@ testT4955_Guest_VerifyAccessCode:
         R_click_product_name_first: { locator: "text=General Admission" }
         sleep_step: 3000
 
+        # Step 3.5: Select a variant (5/7/9 people) - required before Buy now becomes enabled
+        # (variant "9 people" is the default per T2705, so it's always available)
+        R_click_variant: { role: "button", name: "9 people", disable_ai: true }
+        sleep_step: 1000
+
         # Step 4: Click Buy now - triggers "Access code required" dialog
         R_click_buy_now: { locator: "text=Buy now", disable_ai: true }
         sleep_step: 2000
