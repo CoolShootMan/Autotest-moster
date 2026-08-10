@@ -448,9 +448,9 @@ testPartner_verify_commission: # [LAST: BROKEN 2026-05-06]
       {
         locator: '.form-card [data-testid="base-more-horiz-icon-cta"] >> nth=0',
       }
-    sleep_after_more_cta: 200
+      
     R_click_submission_link:
-      { locator: 'a[href^="/curator/submission?formId="]' }
+      { text: "View submissions" }
 
     # Dynamic Count Capture & Search
     capture_total_count: {}

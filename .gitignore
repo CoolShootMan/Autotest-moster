@@ -59,6 +59,7 @@ gemini-tasks/
 debug_*.py
 check_field.py
 debug_drawer.py
+scratch/
 
 # === Test Reports & Results (generated at runtime) ===
 allure/

@@ -34,7 +34,7 @@ from tools.step_capture import StepCapture
 @allure.title("Test Execution")
 def test_case(smokecases1, page: Page, browser: Browser, request):
     val = list(smokecases1.values())[0]
-    
+
     # Guest Mode Setup
     if val.get("guest", False):
         logger.info(f"Running {list(smokecases1.keys())[0]} in GUEST mode")
