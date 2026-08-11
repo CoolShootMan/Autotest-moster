@@ -8,6 +8,7 @@ Author           : AllenLuo
 Version          : 2.0
 '''
 import os
+import json
 os.environ["AI_DISABLED"] = "True"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 while not os.path.exists(os.path.join(BASE_DIR, "test_case")) and BASE_DIR != os.path.dirname(BASE_DIR):
@@ -208,6 +209,54 @@ def context(
     else:
         # Use full mobile emulation args even for guests as requested
         context = browser.new_context(**browser_context_args)
+
+    # --- Guest context: inject minimal non-auth cookies so Pear SPA can route to
+    # the correct tenant. Without `release_katana_vanity_url` the client-side
+    # router falls back to a 404 "Page could not be found" page even though SSR
+    # returns 200. This injects visitor_id + vanity_url (and other harmless
+    # non-auth cookies like katana_cookie_consent) but NOT access/refresh tokens,
+    # keeping the user effectively unauthenticated for permission checks.
+    if is_guest:
+        try:
+            default_cookie_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                f"cookie_{CURRENT_ENV}.json",
+            )
+            if os.path.exists(default_cookie_path):
+                state = json.load(open(default_cookie_path, encoding="utf-8"))
+                non_auth_names = {
+                    # tenant routing — required so SPA recognizes /autotestshop
+                    "release_katana_vanity_url",
+                    "staging_katana_vanity_url",
+                    "prod_katana_vanity_url",
+                    # first-party visitor id
+                    "release_katana_visitor_id",
+                    "staging_katana_visitor_id",
+                    "prod_katana_visitor_id",
+                    # GDPR consent state — harmless
+                    "katana_cookie_consent",
+                    # analytics — harmless, NOT identifying
+                    "_ga",
+                    "_ga_RV17GL444M",
+                    "_rdt_uuid",
+                }
+                guest_cookies = [
+                    c for c in state.get("cookies", [])
+                    if c.get("name") in non_auth_names
+                ]
+                if guest_cookies:
+                    context.add_cookies(guest_cookies)
+                    logger.info(
+                        f"GUEST MODE: injected {len(guest_cookies)} non-auth "
+                        f"cookies from {default_cookie_path} (vanity_url + visitor_id)"
+                    )
+                else:
+                    logger.warning(
+                        "GUEST MODE: no non-auth cookies found in storage state; "
+                        "Pear SPA may render 404"
+                    )
+        except Exception as e:
+            logger.warning(f"GUEST cookie injection failed: {e}")
 
     # Force grant permissions even if storage_state has restricted ones
     try:
