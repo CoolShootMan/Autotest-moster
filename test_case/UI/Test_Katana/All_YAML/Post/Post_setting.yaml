@@ -570,42 +570,45 @@ testT2705_VerifyPartner:
   guest: false
   description: "Partner hides the variant and sets the default variant on the management page"
   test_step:
-    # Step 1: Open Events list page
-    open: "{BASE_URL}/events"
+    # Step 1: Open autotestshop page
+    open: "{BASE_URL}/autotestshop"
     sleep_after_open: 5000
 
-    # Step 2: Find and click "Test event post variant settings" event
-    R_click_event: { locator: "text=Test event post variant settings", exact: true }
-    sleep_step: 4000
-
-    # Step 2.2: Click Posts tab to ensure post cards are visible
-    R_click_posts_tab: { role: "tab", name: "Posts" }
-    sleep_step: 2000
-
-    # Step 3: Click post card to enter post landing page
-    R_click_post_card: { role: "button", name: "test-event-post-variant-settings", index: 0 }
-    sleep_step: 3000
-
-    # Step 3.1: Click "Edit style" button (UI changed: Edit post split into Edit content / Edit style)
-    click_edit_style: { role: "button", name: "Edit style" }
-    sleep_step: 3000
-
-    # Step 3.2: Click Layout dropdown and select "Collection"
-    R_click_layout_dropdown: { locator: "[role='combobox']" }
-    sleep_step: 1000
-    R_click_collection_option: { locator: "text=Collection" }
+    # Step 2: Click "Add" button
+    R_click_add: { role: "button", name: "Add" }
     sleep_step: 1000
 
-    # Step 3.4: Click "Update" to save Edit post changes
-    R_click_update: { role: "button", name: "Update" }
+    # Step 3: Click "Create post Pear-exclusive"
+    R_click_create_post: { role: "button", name: "Create post Pear-exclusive" }
     sleep_step: 2000
 
-
-    # Step 4: Click Selling tab
-    R_click_selling_tab: { role: "tab", name: "Selling" }
+    # Step 4: Click "No" (skip co-sellers)
+    R_click_no: { role: "button", name: "No" }
     sleep_step: 2000
 
-    # Step 5: Click Customize products
+    # Step 5: Click enhance-button-cta (Select products)
+    R_click_select_products: { test_id: "enhance-button-cta" }
+    sleep_step: 2000
+
+    # Step 6: Search for "General Admission" to narrow down product list
+    fill_product_search: { locator: 'input[placeholder="Search product"]', value: 'General Admission' }
+    sleep_step: 500
+
+    # Step 7: Press Enter to execute search
+    press_enter: { press: "Enter" }
+    sleep_step: 2000
+
+    # Step 7.1: JS — find target card, scrollIntoView, and click its checkbox ALL IN ONE call.
+    execute_js_scroll_and_select:
+        script: "( () => { const start = Date.now(); while (Date.now() - start < 6000) { const mediaEls = document.querySelectorAll('.card__media'); for (const media of mediaEls) { const card = media.closest('.MuiCard-root') || media.parentElement; const t = card.textContent || ''; if (t.includes('General Admission') && t.includes('Test event post variant settings')) { media.scrollIntoView({ block: 'center' }); const w = Date.now(); while (Date.now() - w < 300) {} const svg = media.querySelector('.MuiSvgIcon-root'); if (svg) { svg.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); media.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); return 'clicked'; } return 'no_svg'; } } const w2 = Date.now(); while (Date.now() - w2 < 500) {} } return 'not_found'; } )()"
+        assert_equals: 'clicked'
+    sleep_step: 1500
+
+    # Step 8: Click "Add 1/20 product(s)" to add selected product
+    R_click_add_product: { role: "button", name: "Add 1/20 product(s)" }
+    sleep_step: 2000
+
+    # Step 8.1: Click "Customize products" (Commerce tab is default; Customize is next to Select products)
     R_click_customize: { role: "button", name: "Customize products" }
     sleep_before_scroll: 2000
 
@@ -615,16 +618,83 @@ testT2705_VerifyPartner:
     # The default variant checkbox for '9 people' (2nd column checkbox, index=1)
     check_default: { locator: "xpath=//tr[descendant::*[contains(text(), '9 people')]]//input[@type='checkbox']", index: 1 }
 
-    # Save and Save1
+    # Save
     R_click_save: { role: "button", name: "Save" }
-    R_click_save1: { role: "button", name: "Save"}
     sleep_after_update: 5000
 
+    # Step 9: Click "Content" tab
+    click_content_tab: { role: 'tab', name: 'Content' }
+    sleep_step: 1000
+
+    # Step 10: Fill post title
+    fill_post_title: { role: 'textbox', name: 'Post title', value: 'test post variant settings' }
+    sleep_step: 500
+
+    # Step 11: Add cover media (select product image as cover)
+    click_add_cover_media: { role: 'button', name: 'Add cover media' }
+    sleep_step: 1000
+    click_products_media: { text: 'Products', exact: true }
+    sleep_step: 500
+    click_media_img: { role: 'img', name: 'Image of Product', index: 0 }
+    sleep_step: 500
+    click_done_cover: { role: 'button', name: 'Done' }
+    sleep_step: 1000
+
+    # Step 12: Click "Style" tab
+    R_click_style_tab: { role: 'tab', name: 'Style' }
+    sleep_step: 1000
+
+    # Step 13: Click "Layout" to enter layout settings (new UI requires this click)
+    R_click_layout: { role: 'tab', name: 'Layout' }
+    sleep_step: 1000
+
+    # Step 14: Change layout to "Collection" via combobox dropdown
+    R_click_layout_combobox: { role: 'combobox' }
+    sleep_step: 500
+    R_click_collection_option: { locator: 'text=Collection' }
+    sleep_step: 500
+
+    # Step 15: Switch to Settings tab.
+    execute_js_close_popovers_and_click_settings:
+        script: "( () => { const closeAll = () => { const popovers = document.querySelectorAll('.MuiPopover-root, .MuiMenu-root, [role=\"menu\"], [role=\"listbox\"]'); popovers.forEach(p => { if (p.offsetParent !== null) { const closeBtn = p.querySelector('[aria-label=\"Close\"], button'); if (closeBtn) closeBtn.click(); else p.style.display = 'none'; } }); }; closeAll(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); document.body.click(); closeAll(); const tabs = document.querySelectorAll('[role=\"tab\"]'); let visibleSettings = null; for (const t of tabs) { const txt = (t.textContent || '').trim(); if (txt === 'Settings' && t.offsetParent !== null) { visibleSettings = t; break; } } if (visibleSettings) { visibleSettings.click(); return 'clicked Settings (total tabs=' + tabs.length + ')'; } return 'NOT_FOUND: no visible Settings tab (total tabs=' + tabs.length + '); candidates=' + Array.from(tabs).map(t => (t.textContent||'').trim()).filter(Boolean).join('|'); } )()"
+        assert_contains: 'clicked Settings'
+    sleep_step: 1500
+
+    # Step 15.1: Replace the Post URL slug with "test1234".
+    R_click_post_url_input: { role: 'textbox', name: 'https://release.pear.us/' }
+    sleep_step: 500
+    press_select_all_url: { press: 'Control+a' }
+    press_delete_url: { press: 'Backspace' }
+    sleep_step: 300
+    fill_post_url:
+      role: 'textbox'
+      name: 'https://release.pear.us/'
+      value: 'test1234'
+    sleep_step: 1000
+
+    # Step 16: Click "Publish" in the bottom action bar → opens "Ready to Publish?" modal.
+    R_click_publish:
+      locator: ':text-is("Publish")'
+      optional: true
+    sleep_step: 1500
+
+    # Step 17: Click "Publish" INSIDE the "Ready to Publish Your Post?" confirmation modal.
+    R_click_publish_confirm:
+      locator: 'div[role="dialog"] :text-is("Publish")'
+      optional: true
+    sleep_step: 2000
+
+    # Step 18: Click "Apply" INSIDE the "Your item is ready!" modal — scoped to dialog
+    R_click_apply:
+      locator: 'div[role="dialog"] :text-is("Apply")'
+      optional: true
+    sleep_step: 3000
+
   expect_result:
-    description: "Curator successfully saves the operation"
+    description: "Curator successfully publishes post with variants applied"
     assertions:
       - assertion_type: "element_visible_by_text"
-        text: "Post products updated"
+        text: "Post published!"
 
 
 # Separate verification for Guest
@@ -632,8 +702,11 @@ testT2705_VerifyGuest:
   guest: true
   description: "Verify that '5 people' variant is hidden and '9 people' variant is the default variant for guest users after curator action"
   test_step:
-    open: "{BASE_URL}/autotestshop/post/test-event-post-variant-settings"
+    open: "{BASE_URL}/autotestshop/post/test1234"
     sleep_after_open: 5000
+
+    page_scroll: { y: 400, delay: 500 }
+    sleep_step: 500
 
     # Click product card to open product drawer
     R_click_product_card: { role: "img", name: "Image of Product", index: 0 }
@@ -642,8 +715,12 @@ testT2705_VerifyGuest:
     # Scroll down to the variant section in the detail page
     swipe_to_variant: { x: 0, y: 600 }
 
+    execute_js_verify_variants_selected:
+        script: "( () => { const buttons = Array.from(document.querySelectorAll('[role=\"button\"][data-testid=\"styled-list-item-button\"]')); const summary = {}; let nineSelected = false; let fivePresent = false; for (const b of buttons) { const text = (b.textContent || '').trim(); const cs = window.getComputedStyle(b); const isSelected = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' && cs.backgroundColor !== 'transparent'; summary[text] = isSelected ? 'selected' : 'unselected'; if (text === '9 people' && isSelected) nineSelected = true; if (text.includes('5 people')) fivePresent = true; } const prefix = fivePresent ? 'FAIL_5_PRESENT ' : (nineSelected ? 'PASS ' : 'FAIL_9_NOT_SELECTED '); return prefix + JSON.stringify(summary); } )()"
+        assert_contains: 'PASS '
+
   expect_result:
-    description: "The variant '5 people' should be completely hidden and '9 people' variant should be the default variant"
+    description: "The variant '5 people' should be completely hidden and '9 people' variant should be the default (selected) variant"
     assertions:
       - assertion_type: "element_not_visible_by_text"
         text: "5 people"
@@ -653,46 +730,43 @@ testT2705_VerifyGuest:
         text: "9 people"
 
   teardown_step:
-    # Step 1: Inject partner cookies
+    # Step 1: Inject partner cookies (switch from guest back to curator)
     add_cookies: {}
     sleep_step: 1000
 
-    # Step 2: Open Events list page
-    open: "{BASE_URL}/events"
+    # Step 2: Open storefront page
+    open: "{BASE_URL}/autotestshop"
     sleep_step: 5000
 
-    # Step 3: Find and click "Test event post variant settings" event
-    R_click_event: { locator: "text=Test event post variant settings", exact: true }
-    sleep_step: 4000
-
-    # Step 2.1: Scroll down to reveal post card
-    swipe_reset: { x: 0, y: 500 }
-    sleep_step: 1000
-
-    # Step 2.2: Click Posts tab to ensure post cards are visible
-    R_click_posts_tab: { role: "tab", name: "Posts" }
-    sleep_step: 2000
-
-    # Step 3: Click post card to enter post landing page
-    R_click_post_card: { role: "button", name: "test-event-post-variant-settings", index: 0 }
+    # Step 3: Click "My content" button
+    R_click_my_content: { role: "button", name: "My content" }
     sleep_step: 3000
 
-    # Step 4: Click Selling tab
-    R_click_selling_tab_reset: { role: "tab", name: "Selling" }
+    # Step 4: Locate the post card by its URL alias "test1234", then click
+    R_click_post_card: { locator: 'text="test1234" >> xpath=ancestor::*[.//img][1] >> img', index: 0 }
+    sleep_step: 5000
+
+    # Step 5: Wait for post landing page to load
+    wait_for_selling_tab: { selector: 'role=tab[name="Selling"][exact=true]', timeout: 15000 }
+    R_click_selling_tab_reset: { role: "tab", name: "Selling", exact: true }
     sleep_step: 2000
 
-    # Step 5: Click Customize products
+    # Step 6: Click Customize products
     R_click_customize_reset: { role: "button", name: "Customize products" }
     sleep_step: 2000
-    swipe_reset2: { x: 0, y: 500 }
+
+    # Step 7: Uncheck variant checkboxes (reset to default state)
+    uncheck_exclude: { locator: 'input[name="products.0.variants.0.isExcluded"]', checked: false }
+    uncheck_default: { locator: 'input[name="products.0.variants.2.isDefault"]', checked: false }
     sleep_step: 1000
-    swipe_right_reset: { x: 800, y: 0 }
-    sleep_step: 1000
-    uncheck_exclude: { locator: "xpath=//tr[descendant::*[contains(text(), '5 people')]]//input[@type='checkbox']", index: 0, checked: false }
-    uncheck_default: { locator: "xpath=//tr[descendant::*[contains(text(), '9 people')]]//input[@type='checkbox']", index: 1, checked: false }
+
+    # Step 8: Save twice
     R_click_save_reset: { role: "button", name: "Save" }
     R_click_save_reset1: { role: "button", name: "Save" }
     sleep_step: 4000
+
+    # Step 9: Verify success toast "Post product updated!"
+    wait_toast_save_teardown: { message: "Post products updated", timeout: 15000 }
 
 
 # T2830: Partner hides a post on the storefront
