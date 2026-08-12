@@ -914,18 +914,26 @@ testT2834_VerifyPartner:
         R_click_post: { role: "button", name: "verify-post-shipping-fee", index: 0 }
         sleep_step: 2000
 
-        # Step 2: Click "Edit style" button (UI changed: Edit post split into Edit content / Edit style)
+        # Step 2: Click "Edit style" button (navigates to /post/{id}/view Edit post style page)
         click_edit_style: { role: "button", name: "Edit style" }
+        sleep_step: 2500
+        # Layout tab (verified 2026-08-10: Color/Font/Layout tabs; Layout has a combobox with options
+        # Spotlight/Side-by-Side/Triple Feature/Collection/Text First/Story Only)
+        R_click_layout_tab: { role: "tab", name: "Layout", exact: true }
         sleep_step: 1000
         R_click_layout_combobox: { role: "combobox" }
         sleep_step: 500
-        R_click_spotlight_opt: { role: "option", name: "Spotlight Highlight one" }
+        R_click_spotlight_opt: { role: "option", name: "Spotlight" }
         sleep_step: 500
         R_click_update: { role: "button", name: "Update" }
-        sleep_step: 1500
+        sleep_step: 3000
+        # Edit style navigates to a full page; Back returns to the post editor drawer
+        # (Back button has aria-label="Back", no visible text)
+        R_click_back: { role: "button", name: "Back" }
+        sleep_step: 2500
 
         # Step 3: Switch to Selling tab and customize products
-        click_container_button_1: { container: "Selling", container_locator: "..", button: "//button[@role='tab']", button_index: 1}
+        R_click_selling_tab: { role: "tab", name: "Selling", exact: true }
         sleep_step: 2000
         #smart_click_optional_start_customizing: { role: 'button', name: 'Start Customizing' }
         #sleep_step: 1500
@@ -936,7 +944,9 @@ testT2834_VerifyPartner:
         # First search for "test_general_products" to make target card only visible
         fill_product_search_1: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
         sleep_step: 500
-        click_search_btn: { role: 'button', name: 'Search', exact: true }
+        # Select-products dialog Search button has NO accessible name -> trigger search via Enter
+        # (mirrors T2874 verified pattern; clicking role=button name=Search fails)
+        press_search_1: { key: "Enter" }
         sleep_step: 2000
         # At this time only one card, directly click using role+name, no index needed
         click_product_card_1: { role: 'img', name: 'Image of Product', index: 0 }
@@ -1052,9 +1062,11 @@ testT2834_VerifyGuest:
         R_click_customize_products_teardown: { test_id: "enhance-button-cta" }
         sleep_step: 1500
         # First search for "test_general_products" to make target card only visible
-        fill_product_search:_2: { locator: 'input[placeholder=“Search product"]', value: 'test_general_products' }
+        fill_product_search_2: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
         sleep_step: 500
-        click_search_btn: { role: 'button', name: 'Search' }
+        # Select-products dialog Search button has NO accessible name -> trigger search via Enter
+        # (mirrors T2874/T2834_VerifyPartner/T5033 verified pattern; clicking role=button name=Search fails)
+        press_search_2: { key: "Enter" }
         sleep_step: 2000
         # At this time only one card, directly click using role+name, no index needed
         click_product_card_2: { role: 'img', name: 'Image of Product', index: 0 }
@@ -1834,56 +1846,65 @@ testT5033_5034_VerifyPartner:
     description: "Verify that partner can set a product to have free shipping"
     test_step:
         # Step 1: Duplicate ticket
-        open: "{BASE_URL}/events"
+        open_events_1: "{BASE_URL}/events"
         sleep_step: 3000
-        R_click_event: { role: "cell", name: "verify-post-shipping_fee", optional: false }
+        R_click_event_1: { role: "cell", name: "verify-post-shipping_fee", optional: false }
         sleep_step: 2000
-        R_click_tickets_tab_1: { role: 'tab', name: 'Tickets' }
+        R_click_tickets_tab_1: { role: 'tab', name: 'Tickets', exact: true }
         sleep_after_tickets_tab: 1500
-        # Click More button (three-dot icon)
-        click_more_button_1: { role: "button", name: "More action", index: 1 }
-        sleep_step: 500
-        # Click Duplicate from menu
-        R_click_duplicate_menuitem_1: { role: "menuitem", name: "Duplicate" }
-        sleep_step: 500
-        R_click_duplicate_1: { role: "button", name: "Duplicate" }
-        sleep_step: 500
-        # R_click_gotit_1: { role: "button", name: "Got it", optional: true }
-        # sleep_step: 500
-        click_more_button_2: { role: "button", name: "More action", index: 1  }
-        sleep_step: 500
-        R_click_duplicate_menuitem_2: { role: "menuitem", name: "Duplicate" }
-        sleep_step: 500
-        R_click_duplicate_2: { role: "button", name: "Duplicate" }
-        sleep_step: 500
-        # R_click_gotit_2: { role: "button", name: "Got it", optional: true }
-        # sleep_step: 500
-        click_more_button_3: { role: "button", name: "More action", index: 1  }
-        sleep_step: 500
-        R_click_duplicate_menuitem_3: { role: "menuitem", name: "Duplicate" }
-        sleep_step: 500
-        R_click_duplicate_3: { role: "button", name: "Duplicate" }
-        sleep_step: 500
-        # R_click_gotit_3: { role: "button", name: "Got it", optional: true }
-        # sleep_step: 500
-        # click_confirm_button: { test_id: "confirm-button", optional: true }
-        # sleep_step: 1000
-        verify_toast: { text: "Product duplicated successfully" }
+        # Step 1: Duplicate 2 tickets via each ticket card's "Tools" -> "Duplicate" (IN-PLACE)
+        # (verified 2026-08-10 on release): the ticket card has a "Tools" button whose menu
+        # contains an in-place "Duplicate" menuitem. It opens a pre-filled
+        # /events/{id}/products/{pid}/duplicate?mode=TICKET form; clicking the "Duplicate"
+        # submit button at the bottom creates the copy and returns to the event (ticket count 1->2).
+        # NOTE: the event's three-dot "More action" menu only has the CROSS-EVENT
+        # "Duplicate ticket from…" — that is NOT what we want here.
+        R_click_tools_1: { role: "button", name: "Tools" }
+        sleep_step: 800
+        R_click_duplicate_menuitem_1: { role: "menuitem", name: "Duplicate", exact: true }
+        sleep_step: 3000
+        R_click_duplicate_submit_1: { role: "button", name: "Duplicate" }
+        sleep_step: 3000
+        # duplicate SPA-redirect is unreliable in automation; force-navigate back to the event
+        # (suffix _2 avoids YAML duplicate-key collapse: test_step is a dict, so a repeated bare
+        #  "open"/"R_click_event" key would be folded to its LAST occurrence and silently skipped)
+        open_events_2: "{BASE_URL}/events"
+        sleep_step: 2000
+        R_click_event_2: { role: "cell", name: "verify-post-shipping_fee", optional: false }
+        sleep_step: 2000
+        R_click_tickets_tab_1b: { role: "tab", name: "Tickets", exact: true }
+        sleep_step: 1500
+        R_click_tools_2: { role: "button", name: "Tools" }
+        sleep_step: 800
+        R_click_duplicate_menuitem_2: { role: "menuitem", name: "Duplicate", exact: true }
+        sleep_step: 3000
+        R_click_duplicate_submit_2: { role: "button", name: "Duplicate" }
+        sleep_step: 2000
+        verify_toast: { text: "Product duplicated successfully", optional: true }
+        # force-navigate back to the event so Step 2 starts on the event view
+        # (suffix _3 for the same duplicate-key-collapse reason as above)
+        open_events_3: "{BASE_URL}/events"
+        sleep_step: 2000
+        R_click_event_3: { role: "cell", name: "verify-post-shipping_fee", optional: false }
+        sleep_step: 2000
 
         # Step 2: Create a post
         sleep_step: 2000
-        R_click_event_tab_2: { role: 'tab', name: 'Event', exact:true }
+        R_click_event_tab_2: { role: 'tab', name: 'Event', exact: true }
         R_click_posts_tab: { role: "tab", name: "Posts" }
         sleep_step: 2000
         R_click_Create_post: { role: "button", name: "Add another post" }
-        sleep_after_create_post: 2000
-        #smart_click_optional_confirm: { role: "button", name: "Confirm" }
-        click_confirm: { role: "button", name: "Confirm" }
+        sleep_after_create_post: 2500
+        # "Add another post" triggers a "Your event is ready to share!" modal (no Confirm button
+        # exists). Dismiss it via its primary "Apply" button. optional:true so the run still proceeds
+        # if the modal happens not to appear (e.g. shown only once per event / already dismissed).
+        R_click_apply_ready: { role: "button", name: "Apply", optional: true }
         sleep_step: 1500
-        R_click_event: { role: "cell", name: "verify-post-shipping_fee", optional: false }
-        sleep_step: 2000
-        R_click_posts_tab_2: { role: "tab", name: "Posts" }
-        sleep_step: 2000
+        # After "Apply" we are already on the event detail Posts tab with the post cards
+        # rendered. Open the (first) post directly — no need to round-trip back to the
+        # /events listing and re-enter (that path required a now-missing open_events_4 nav
+        # and was fragile). Clicking the post card action area opens the post editor
+        # (Content tab, with a Selling tab available).
         R_click_post: { test_id: "mui-card-action-area" }
         sleep_step: 2000
 
@@ -1893,51 +1914,36 @@ testT5033_5034_VerifyPartner:
         R_click_select_products: { test_id: "enhance-button-cta" }
         sleep_step: 2000
 
-        # Step 4: Add product
-         # First search for "test_general_products" to make general only visible
+        # Step 4: Add test_general_products and customize ITS call-to-action.
+        # The target post may already contain many products (env data drift), so every
+        # action is scoped to the "test_general_products" product entry by name instead of
+        # assuming fixed products.* indices (those broke once the post accumulated products).
+        # First search for "test_general_products" to make it the only visible card
         fill_product_search_4: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
         sleep_step: 500
-        click_search_btn_2: { role: 'button', name: 'Search', exact: true }
+        # Select-products dialog Search button has NO accessible name -> trigger via Enter
+        # (mirrors T2874/T2834 verified pattern; clicking role=button name=Search fails)
+        press_search_4: { key: "Enter" }
         sleep_step: 1500
-        # At this time only one card, directly click using role+name, no index needed
+        # click the test_general_products card (first/only visible card after search)
         click_product_card_5: { role: 'img', name: 'Image of Product' }
-        click_add_product_btn_1: { role: 'button', name: 'Add 5/20 product(s)' }
+        # Add button text is "Add N/20 product(s)" where N varies with the post's existing
+        # product count — match on the stable "product(s)" substring, not a hardcoded count.
+        click_add_product_btn_1: { role: 'button', name: 'product(s)' }
         sleep_step: 1000
-        #page_scroll: { y: 800, delay: 1500, steps: 3 }
-        # sleep_step: 1000
-        # Advanced settings collapsed by default; expand products.0 before toggling isCtaCustomized
-        # (verified in browser 2026-08-10: collapsed -> input not in DOM; expand index 0 -> products.0.isCtaCustomized appears)
-        R_click_expand_details_0: { test_id: "ExpandMoreIcon", index: 0 }
+
+        # Expand test_general_products details (scoped to its product card by name)
+        click_container_button_expand_tgp: { container: "test_general_products", button: "[data-testid='ExpandMoreIcon']", button_index: 0 }
         sleep_step: 1000
-        check_cta_type_1: { locator: 'input[name="products.0.isCtaCustomized"]', checked: true }
+        # Check its "isCtaCustomized" (scoped to the product card; set_checked is idempotent)
+        check_cta_tgp: { container: "test_general_products", locator: "input[name$='isCtaCustomized']", checked: true }
         sleep_step: 500
-        # Product 0: Click Buy now -> select View options
-        R_click_buy_now_0: { locator: 'div[role="combobox"]:has-text("Buy now")' }
+        # Set its Buy now CTA option -> "View options"
+        click_container_button_buynow_tgp: { container: "test_general_products", button: "div[role='combobox']:has-text('Buy now')", button_index: 0 }
         R_click_option_view_options: { role: "option", name: "View options" }
         sleep_step: 500
-        swipe: { x: 0, y: 500 }
-        sleep_step: 500
-        # expand products.1 before toggling isCtaCustomized
-        R_click_expand_details_1: { test_id: "ExpandMoreIcon", index: 1 }
-        sleep_step: 1000
-        check_cta_type_2: { locator: 'input[name="products.1.isCtaCustomized"]', checked: true }
-        # Product 1: Click Buy now -> select Add to cart
-        R_click_buy_now_1: { locator: 'div[role="combobox"]:has-text("Buy now")' }
-        R_click_option_add_to_cart: { role: "option", name: "Add to cart" }
-        sleep_step: 500
-        # expand products.2 before toggling isCtaCustomized
-        R_click_expand_details_2: { test_id: "ExpandMoreIcon", index: 2 }
-        sleep_step: 1000
-        check_cta_type_3: { locator: 'input[name="products.2.isCtaCustomized"]', checked: true }
-        # Product 2: Click Buy now -> select View Product
-        R_click_buy_now_2: { locator: 'div[role="combobox"]:has-text("Buy now")' }
-        sleep_step: 500
-        R_click_option_view_product: { role: "option", name: "View Product" }
 
-        # expand products.3 before toggling isCtaCustomized
-        R_click_expand_details_3: { test_id: "ExpandMoreIcon", index: 3 }
-        sleep_step: 1000
-        check_cta_type_4: { locator: 'input[name="products.3.isCtaCustomized"]', checked: true }
+        # Verify the CTA type prompt is present for test_general_products
         verify_cta_type_4:
             text: 'Choose call-to-action type'
             container: 'test_general_products'

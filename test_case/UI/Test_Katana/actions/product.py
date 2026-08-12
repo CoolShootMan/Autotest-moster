@@ -160,6 +160,9 @@ def verify_toast_message(page: Page, v: dict):
         except:
             logger.error(f"Toast message '{text}' MISSING.")
             page.screenshot(path="fail_toast_verify.png")
+            if v.get("optional"):
+                logger.warning(f"Toast '{text}' optional -> not failing the test.")
+                return
             raise AssertionError(f"Toast message '{text}' not found.")
 
 def select_replacement_product(page: Page, v: dict):

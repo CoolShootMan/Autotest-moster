@@ -331,11 +331,17 @@ def smart_check(page: Page, v: dict):
     target_index = v.get("index", 0)
     no_modal_scope = v.get("no_modal_scope", False)
     optional = v.get("optional", False)
-    logger.info(f"Checking '{target_name or target_locator}' to {checked}")
+    container = v.get("container")
+    logger.info(f"Checking '{target_name or target_locator}' to {checked}"
+                + (f" (scoped to container '{container}')" if container else ""))
 
     def _get_el(root):
+        if container:
+            # Scope the search to the innermost element containing the container text,
+            # mirroring click_container_button's container resolution.
+            root = root.locator("div", has_text=container).last
         if target_locator:
-            return page.locator(target_locator).nth(target_index)
+            return root.locator(target_locator).nth(target_index)
         elif target_role:
             return root.get_by_role(target_role, name=target_name).nth(target_index)
         else:
