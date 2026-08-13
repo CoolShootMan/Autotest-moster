@@ -586,30 +586,31 @@ testT2705_VerifyPartner:
     R_click_no: { role: "button", name: "No" }
     sleep_step: 2000
 
-    # Step 5: Click enhance-button-cta (Select products)
-    R_click_select_products: { test_id: "enhance-button-cta" }
+    # Step 5: Click "Select" button.
+    R_click_select_products: { role: "button", name: "Select" }
+    sleep_step: 6000
+
+    # Step 5.5: Switch Select products dialog to grid/card view.
+    R_click_grid_view: { role: "button", name: "grid" }
+    sleep_step: 5000
+
+    # Step 6: Search for "General Admission" — fill triggers onChange (debounced fetch).
+    # No Enter — would race with the in-flight debounce fetch and stall loading.
+    fill_search_product: { placeholder: "Search product", value: "General Admission" }
+    sleep_step: 8000
+
+    # Step 7.1: Click "General Admission" — disambiguate by matching BOTH title and unique description.
+    # Two products share title "General Admission"; custom variant has desc "Test event post variant settings".
+    R_click_general_admission: { locator: '[role="dialog"] [class*="MuiCard"]:has-text("Test event post variant settings") >> text="General Admission"', disable_ai: true }
     sleep_step: 2000
 
-    # Step 6: Search for "General Admission" to narrow down product list
-    fill_product_search: { locator: 'input[placeholder="Search product"]', value: 'General Admission' }
-    sleep_step: 500
-
-    # Step 7: Press Enter to execute search
-    press_enter: { press: "Enter" }
-    sleep_step: 2000
-
-    # Step 7.1: JS — find target card, scrollIntoView, and click its checkbox ALL IN ONE call.
-    execute_js_scroll_and_select:
-        script: "( () => { const start = Date.now(); while (Date.now() - start < 6000) { const mediaEls = document.querySelectorAll('.card__media'); for (const media of mediaEls) { const card = media.closest('.MuiCard-root') || media.parentElement; const t = card.textContent || ''; if (t.includes('General Admission') && t.includes('Test event post variant settings')) { media.scrollIntoView({ block: 'center' }); const w = Date.now(); while (Date.now() - w < 300) {} const svg = media.querySelector('.MuiSvgIcon-root'); if (svg) { svg.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); media.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); return 'clicked'; } return 'no_svg'; } } const w2 = Date.now(); while (Date.now() - w2 < 500) {} } return 'not_found'; } )()"
-        assert_equals: 'clicked'
-    sleep_step: 1500
 
     # Step 8: Click "Add 1/20 product(s)" to add selected product
     R_click_add_product: { role: "button", name: "Add 1/20 product(s)" }
     sleep_step: 2000
 
-    # Step 8.1: Click "Customize products" (Commerce tab is default; Customize is next to Select products)
-    R_click_customize: { role: "button", name: "Customize products" }
+    # Step 8.1: Click "Customize" button (renamed by Pear UI team from "Customize products" → "Customize")
+    R_click_customize: { role: "button", name: "Customize" }
     sleep_before_scroll: 2000
 
     # The exclude checkbox for '5 people' (1st column checkbox, index=0)
@@ -751,8 +752,8 @@ testT2705_VerifyGuest:
     R_click_selling_tab_reset: { role: "tab", name: "Selling", exact: true }
     sleep_step: 2000
 
-    # Step 6: Click Customize products
-    R_click_customize_reset: { role: "button", name: "Customize products" }
+    # Step 6: Click Customize (Pear UI renamed from "Customize products")
+    R_click_customize_reset: { role: "button", name: "Customize" }
     sleep_step: 2000
 
     # Step 7: Uncheck variant checkboxes (reset to default state)
@@ -812,28 +813,13 @@ testT2830_VerifyGuest:
         # Open the autotestshop page
         open: "{BASE_URL}/autotestshop"
         sleep_after_open: 5000
-        
-        # Scroll to Posts tab location first
-        page_scroll: { y: 600, delay: 2000, steps: 5 }
-        sleep_step: 1000
-        
-        # Click Posts tab to navigate to posts section
-        R_click_posts_tab: { role: "tab", name: "Posts" }
-        sleep_step: 2000
-        
-        # Continue scrolling down to load posts
+
+        # Scroll down 
         scroll_to_bottom: { iterations: 10, delay: 500 }
 
-        sleep_step: 1000
-        
-        # Scroll more to find the post
-        page_scroll: { y: 800, delay: 1500, steps: 20 }
-        sleep_step: 1000
-        
-        # The post should be hidden from guest view (as set by partner in teardown)
-        # If the post IS visible, it means the hide setting wasn't applied
+        # The post should be hidden from guest view
         verify_text_hidden: { text: "test-event-post-variant-settings", timeout: 5000 }
-        
+
         sleep_end: 2000
     expect_result:
         description: "The post should be hidden from the store for guest users"
@@ -854,44 +840,33 @@ testT2830_VerifyGuest:
         R_click_event_reset: { locator: "text=Test event post variant settings", exact: true }
         sleep_step: 4000
 
-        # Step 3.1: Scroll down to reveal post card
-        swipe_reset: { x: 0, y: 500 }
-        sleep_step: 1000
-
-        # Step 3.2: Click Posts tab to ensure post cards are visible
+        # Step 3.1: Click Posts tab
         R_click_posts_tab: { role: "tab", name: "Posts" }
         sleep_step: 2000
 
-        # Step 4: Click post card to enter post landing page
+        # Step 3.2: Click post card to enter post landing page
         R_click_post_card: { role: "button", name: "test-event-post-variant-settings", index: 0 }
         sleep_step: 3000
 
-        # Step 5: Click Seting tab
+        # Step 4: Click Setting tab
         R_click_setting_tab_reset: { role: "tab", name: "Settings" }
         sleep_step: 2000
 
 
-        # Step 6: Uncheck hideInStore
+        # Step 5: Uncheck hideInStore
         uncheck_hide_in_store: { locator: "input[name='hideInStore']", checked: false }
         R_click_Save: { role: "button", name: "Save" }
         sleep_step: 3000
 
-        # Step 7: Clear cookies to switch back to guest context
-        clear_cookies: {}
+        # Step 6: Clear partner cookies and inject guest cookies for tenant routing
+        clear_cookies: { inject_guest: true }
         sleep_step: 1000
 
-        # Step 8: Verify in guest context that the post is now visible
+        # Step 7: Verify in guest context that the post is now visible
         open_guest_shop: "{BASE_URL}/autotestshop"
         sleep_step: 5000
         
-        # Scroll down to find Posts tab
-        page_scroll: { y: 800, delay: 1500, steps: 3 }
-        
-        # Click Posts tab
-        R_click_posts_tab: { role: "tab", name: "Posts" }
-        sleep_step: 2000
-        
-        # Scroll down to find the target post
+        # Scroll down 
         scroll_to_bottom: { iterations: 10, delay: 500 }
         
         screenshot_guest_view_restored: { name: "debug_guest_view_restored" }
@@ -1325,7 +1300,7 @@ testT2515_VerifyDisabled_WithVariant:
         sleep_step: 500
 
         # Step 9: Place order
-        R_click_place_order: { role: "button", name: "Place order" }
+        R_click_place_order: { role: "button", name: "RSVP" }
         #wait_for_url: { url: "*order*", timeout: 2000 } 
         sleep_step: 3500
 
@@ -1339,42 +1314,16 @@ testT2515_VerifyDisabled_WithVariant:
         R_click_product_card_reopen: { locator: "text=General Admission" }
         sleep_step: 2000
 
-        # Step 10.2: Select variant "9 people", set qty=5, Add to cart
+        # Step 10.2: Select variant "9 people" — qty input is already disabled (cart=5=limit, max_available=0)
         R_click_variant_9people: { locator: "text=9 people" }
-        sleep_step: 1000
-        fill_qty_9people: { near_text: "9 people", role: "spinbutton", value: "5" }
-        sleep_step: 500
-        R_click_add_to_cart_9people: { locator: "text=Add to cart", disable_ai: true }
-        sleep_step: 2000
+        sleep_step: 2500  # let drawer render disabled state + warning
 
-        # Step 10.3: Click Checkout
-        R_click_checkout_9people: { role: "button", name: "Checkout" }
-        sleep_step: 3000
-
-        # Step 10.4: Click Continue
-        R_click_continue_9people: { role: "button", name: "Continue" }
-        sleep_step: 2000
-
-        # Step 10.5: Fill Contact info
-        fill_first_name_9: { locator: 'input[name="contact.firstName"]', value: 'Test' }
-        sleep_step: 500
-        fill_last_name_9: { locator: 'input[name="contact.lastName"]', value: 'User' }
-        sleep_step: 500
-        fill_phone_9: { role: "textbox", name: "Phone number", value: '+1 (650) 900-6646' }
-        sleep_step: 500
-        fill_email_9: { locator: 'input[name="contact.email"]', value: 'xuan.ext+123@1m.app' }
-        sleep_step: 500
-
-        # Step 11: Place order - should fail with error
-        R_click_place_order_9: { role: "button", name: "Place order" }
-        sleep_step: 5000
-
-        # Step 12: Verify error message is displayed (text may appear on page or in toast)
-        verify_error_message: { text: "Each customer can buy up to 5 items from this post." }
+        # Step 11: Verify over-limit warning is shown
+        verify_purchase_limit_warning: { text: "You've reached the purchase limit." }
         sleep_end: 3000
 
     expect_result:
-        description: "First order succeeds, second order for 9 people fails with error"
+        description: "First order succeeds; second drawer attempt shows disabled qty + 'You've reached the purchase limit.' warning"
 
     teardown_step:
         # Step 1: Inject partner cookies to login as partner
@@ -1384,14 +1333,16 @@ testT2515_VerifyDisabled_WithVariant:
         # Step 2: Open Events list page
         open: "{BASE_URL}/events"
         sleep_step: 3000
-        R_click_posts_tab: { role: "tab", name: "Posts" }
-        sleep_step: 2000
 
-        # Step 3: Find and click "Test event post variant settings" event
+        # Step 2.1: Click event card first to enter event detail page (Posts tab lives inside event detail now)
         R_click_event_teardown: { locator: "text=Test event post variant settings", exact: true }
         sleep_step: 4000
 
-        # Step 3.1: Scroll down to reveal post card
+        # Step 2.2: Click Posts tab (now inside event detail)
+        R_click_posts_tab: { role: "tab", name: "Posts" }
+        sleep_step: 2000
+
+        # Step 3: Scroll down to reveal post card
         scroll_to_bottom: { iterations: 3, delay: 500 }
         sleep_step: 1000
 
@@ -1399,7 +1350,7 @@ testT2515_VerifyDisabled_WithVariant:
         R_click_post_card: { role: "button", name: "test-event-post-variant-settings", index: 0 }
         sleep_step: 3000
 
-        # Step 5: Click Seting tab
+        # Step 5: Click Settings tab
         R_click_setting_tab_teardown: { role: "tab", name: "Settings" }
         sleep_step: 2000
 
@@ -2076,8 +2027,8 @@ testT4955_Guest_VerifyAccessCode:
         R_click_variant: { role: "button", name: "9 people", disable_ai: true }
         sleep_step: 1000
 
-        # Step 4: Click Buy now - triggers "Access code required" dialog
-        R_click_buy_now: { locator: "text=Buy now", disable_ai: true }
+        # Step 4: Click Buy now (RSVP for free product) - triggers "Access code required" dialog
+        R_click_buy_now: { role: "button", name: "RSVP", disable_ai: true }
         sleep_step: 2000
 
         # Step 5: Verify access code dialog appears
@@ -2106,8 +2057,8 @@ testT4955_Guest_VerifyAccessCode:
         fill_email: { locator: 'input[name="contact.email"]', value: 'xuan.ext+123@1m.app' }
         sleep_step: 500
 
-        # Step 10: Place order
-        R_click_place_order: { role: "button", name: "Place order" }
+        # Step 10: Complete RSVP (free event checkout button is "RSVP", not "Place order")
+        R_click_place_order: { role: "button", name: "RSVP" }
         sleep_end: 3000
 
     expect_result:

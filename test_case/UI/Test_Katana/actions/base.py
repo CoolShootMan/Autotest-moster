@@ -424,9 +424,60 @@ def smart_add_cookies(page: Page, v: dict):
     logger.info(f"Added {len(cookies)} partner cookies from {state_path}")
 
 def clear_cookies(page: Page, v: dict):
-    """Clear all cookies from the current context to switch to guest."""
+    """Clear all cookies/storage from the current context to switch to guest.
+    Optionally inject minimal non-auth guest cookies (vanity_url, visitor_id,
+    consent/analytics) so Pear SPA tenant routing still works after the switch.
+    Also clears localStorage/sessionStorage because Pear keeps auth tokens there too.
+    """
+    import json
     page.context.clear_cookies()
     logger.info("Cleared all cookies to switch back to guest context")
+
+    # Pear stores partner auth tokens in localStorage/sessionStorage as well as cookies.
+    # Navigating to about:blank first lets us clear storage for all origins safely.
+    try:
+        page.goto("about:blank", wait_until="domcontentloaded", timeout=5000)
+        page.evaluate("() => { try { localStorage.clear(); } catch(e) {} try { sessionStorage.clear(); } catch(e) {} }")
+        logger.info("Cleared localStorage and sessionStorage for guest switch")
+    except Exception as e:
+        logger.warning(f"Clearing storage for guest switch failed: {e}")
+
+    if v.get("inject_guest"):
+        state_path = v.get("storage_state") or os.path.join(
+            BASE_DIR, "test_case", "UI", "Test_Katana", "cookie_release.json"
+        )
+        try:
+            state = json.load(open(state_path, encoding="utf-8"))
+            non_auth_names = {
+                # tenant routing — required so SPA recognizes /autotestshop
+                "release_katana_vanity_url",
+                "staging_katana_vanity_url",
+                "prod_katana_vanity_url",
+                # first-party visitor id
+                "release_katana_visitor_id",
+                "staging_katana_visitor_id",
+                "prod_katana_visitor_id",
+                # GDPR consent state — harmless
+                "katana_cookie_consent",
+                # analytics — harmless, NOT identifying
+                "_ga",
+                "_ga_RV17GL444M",
+                "_rdt_uuid",
+            }
+            guest_cookies = [
+                c for c in state.get("cookies", [])
+                if c.get("name") in non_auth_names
+            ]
+            if guest_cookies:
+                page.context.add_cookies(guest_cookies)
+                logger.info(
+                    f"INJECT_GUEST: added {len(guest_cookies)} non-auth cookies "
+                    f"from {state_path} (vanity_url + visitor_id)"
+                )
+            else:
+                logger.warning("INJECT_GUEST: no non-auth cookies found in storage state")
+        except Exception as e:
+            logger.warning(f"INJECT_GUEST failed: {e}")
 
 def smart_upload(page: Page, v: dict):
     if "file_path" in v:
