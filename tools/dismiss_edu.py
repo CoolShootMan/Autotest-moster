@@ -46,10 +46,10 @@ ACCOUNTS = [
 
 
 def dismiss_edu_popups(page: "Page", retries: int = 5) -> None:
-    """Click away all EDU popup buttons that may appear on the page (Next / Save / Got it / Try it now)."""
+    """Click away all EDU popup buttons that may appear on the page (Next / Save / Got it / Done / Try it now)."""
     for _ in range(retries):
         clicked = False
-        for text in ("Next", "Save", "Got it"):
+        for text in ("Next", "Save", "Got it", "Done"):
             try:
                 page.locator("button").filter(has_text=text).click(timeout=800)
                 clicked = True
@@ -112,7 +112,15 @@ def handle_create_post_edu(page: "Page", base_url: str) -> None:
 
     # Click enhance CTA to trigger product-selection EDU
     try:
-        page.get_by_test_id("enhance-button-cta").click(timeout=1500)
+        page.get_by_test_id("enhance-button-cta").click(timeout=1000)
+        page.wait_for_timeout(200)
+        dismiss_edu_popups(page)
+    except Exception:
+        pass
+
+    #Click enhance CTA to trigger product-selection EDU
+    try:
+        page.get_by_test_id("ExpandMoreIcon").click(timeout=1000)
         page.wait_for_timeout(200)
         dismiss_edu_popups(page)
     except Exception:
@@ -120,7 +128,8 @@ def handle_create_post_edu(page: "Page", base_url: str) -> None:
 
     # Select a product image to trigger product EDU
     try:
-        page.get_by_role("img", name="Image of Product").first.click(timeout=1500)
+        #page.get_by_role("img", name="Image of Product").first.click(timeout=1500)
+        page.get_by_test_id("SquareLineIcon").first.click(timeout=1000)
         page.wait_for_timeout(200)
         dismiss_edu_popups(page)
     except Exception:
@@ -128,7 +137,7 @@ def handle_create_post_edu(page: "Page", base_url: str) -> None:
 
     # Confirm adding the product
     try:
-        page.get_by_role("button", name="Add 1/20 product(s)").click(timeout=1500)
+        page.get_by_role("button", name="Add 1/20 product(s)").click(timeout=1000)
         page.wait_for_timeout(200)
         dismiss_edu_popups(page)
     except Exception:
@@ -170,8 +179,22 @@ def handle_selling_customize(page: "Page") -> None:
     except Exception:
         pass
 
+    # The button label on the Selling page is just "Customize" (not "Customize products"),
+    # so we use a regex match — old code's exact match silently failed and downstream
+    # "Done" clicks never ran, leaving "Choose a resale model" EDU un-dismissed.
     try:
-        page.get_by_role("button", name="Customize products").click(timeout=1500)
+        import re
+        page.get_by_role("button", name=re.compile(r"^Customize$", re.I)).first.click(timeout=1500)
+        page.wait_for_timeout(300)
+        dismiss_edu_popups(page)
+    except Exception:
+        pass
+
+    # After clicking Customize, the "Choose a resale model" EDU popover can appear
+    # before the user hits "Start Customizing". Dismiss it eagerly here so it doesn't
+    # cover the actual Start Customizing button.
+    try:
+        page.get_by_role("button", name="Start Customizing").click(timeout=1500)
         page.wait_for_timeout(300)
         dismiss_edu_popups(page)
     except Exception:
@@ -182,17 +205,13 @@ def handle_selling_customize(page: "Page") -> None:
     except Exception:
         pass
 
-    try:
-        page.get_by_role("button", name="Start Customizing").click(timeout=1500)
-        page.wait_for_timeout(300)
-        dismiss_edu_popups(page)
-    except Exception:
-        pass
-
-    for _ in range(3):
+    # "Choose a resale model" EDU: popover over the editor area; the Done button lives
+    # inside a Popover. Click it up to 4× in case the user model choices advance the popup.
+    for _ in range(4):
         try:
-            page.locator("button").filter(has_text="Done").click(timeout=800)
+            page.locator("button").filter(has_text="Done").first.click(timeout=800)
             page.wait_for_timeout(200)
+            dismiss_edu_popups(page)
         except Exception:
             break
 
