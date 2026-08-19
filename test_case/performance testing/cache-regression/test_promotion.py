@@ -53,17 +53,17 @@ PROMO_BODY = {
 }
 
 
-# ---- 新增 auto coupon（2620）与加购读路径常量 ----
+# ---- auto coupon 模板（动态 id）与加购读路径常量 ----
 
-# 当前 release 环境已配置的 auto coupon（满 20 减 10%，autoApplied）
-AUTO_COUPON = {
-    "promotionId": "2620",
+# auto coupon 模板：不带 promotionId——PATCH 时服务端新建并分配递增新 id（与 web 行为一致），
+# 全程用动态 id，绝不写死（写死过期 id 如 2620 会触发 katana-promotion 事务超时 503）。
+AUTO_COUPON_TEMPLATE = {
     "amountThresholdDiscounts": [
         {"amountThreshold": 20, "discountPercentage": 10}
     ],
     "applicableCode": "",
     "codeAliases": [],
-    "title": "auto coupon ",
+    "title": "",
     "description": "automation test",
     "autoApplied": True,
     "oneTimeUsePerCustomer": False,

@@ -23,7 +23,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install httpx pytest pytest-asyncio
+          pip install httpx pytest pytest-asyncio playwright
+          # SSR 用例依赖浏览器 console 抓取，需安装 chromium
+          playwright install --with-deps chromium
 
       - name: Run cache-regression tests
         working-directory: test_case/performance testing/cache-regression
