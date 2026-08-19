@@ -1,0 +1,52 @@
+name: cache-regression-daily
+
+on:
+  schedule:
+    # 每天 10:00 北京时间（UTC 02:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  cache-regression:
+    name: cache-regression-daily-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install httpx pytest pytest-asyncio
+
+      - name: Run cache-regression tests
+        working-directory: test_case/performance testing/cache-regression
+        run: pytest -v
+
+      - name: Upload test output (audit report)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cache-regression-output
+          path: test_case/performance testing/cache-regression/output
+
+      - name: Send failure notification email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: '[CI] cache-regression 每日回归失败'
+          to: linda.zhou.ext@1m.app
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            cache-regression 每日回归测试失败，请查看 GitHub Actions 运行日志：
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

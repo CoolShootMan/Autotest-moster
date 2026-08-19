@@ -485,7 +485,14 @@ def pytest_sessionstart(session):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """测试结束后生成 GET API DB 审计报告。"""
+    """测试结束后：tear-down 清理测试购物车 + 生成 GET API DB 审计报告。"""
+    try:
+        # tear-down：DELETE /cart 清空测试购物车，
+        # 避免每日 CI 跑测中 PUT /cart 加购导致 quantity 无限累加
+        resp = httpx.delete(f"{KATANA_API}/cart", headers=AUTH_HEADERS, timeout=15)
+        print(f"\n[tear-down] DELETE {KATANA_API}/cart -> {resp.status_code}")
+    except Exception as exc:  # 清理失败不阻断测试结果
+        print(f"\n[tear-down] DELETE /cart 失败: {exc}")
     try:
         report_path = _write_get_db_audit_report()
         print(f"\n[GET API DB 审计] 报告已生成: {report_path}")
