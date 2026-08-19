@@ -36,17 +36,6 @@ jobs:
           name: cache-regression-output
           path: test_case/performance testing/cache-regression/output
 
-      - name: Send failure notification email
-        if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_HOST }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USER }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: '[CI] cache-regression 每日回归失败'
-          to: linda.zhou.ext@1m.app
-          from: ${{ secrets.SMTP_FROM }}
-          body: |
-            cache-regression 每日回归测试失败，请查看 GitHub Actions 运行日志：
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # 失败通知：方案 B，走 GitHub 原生通知（无 SMTP）。
+      # 需将该 GitHub 账号的通知邮箱设为 linda.zhou.ext@1m.app 并开启 Actions 通知，
+      # workflow run 失败时 GitHub 会自动发邮件，无需额外配置。
