@@ -420,11 +420,12 @@ def _write_get_db_audit_report() -> str:
         status_seq = [e["status"] for e in entries]
         # 仅 2xx 响应计入 DB 判定（非 2xx 时 DB 计数不可信）
         valid_indices = [i for i, s in enumerate(status_seq) if 200 <= s < 300]
-        # 违规：第 2 次及以后的 2xx 请求 DB>0
+        # 违规：按 2xx 有效请求序列的第 2 次及以后 DB>0 判定；
+        # 首个 2xx（无论其在原始序列中的位置）视为冷启动/预热穿透，不判违规。
         leaked = [
             (i + 1, db_seq[i], status_seq[i])
-            for i in valid_indices
-            if i >= 1 and db_seq[i] > 0
+            for n, i in enumerate(valid_indices)
+            if n >= 1 and db_seq[i] > 0
         ]
         # 首次是否冷启动穿透
         first_db = db_seq[0] if db_seq else -1
