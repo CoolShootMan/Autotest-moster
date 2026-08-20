@@ -31,6 +31,28 @@ jobs:
         working-directory: test_case/performance testing/cache-regression
         run: pytest -v
 
+      - name: Print audit report to job summary
+        if: always()
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          LATEST=$(ls -t output/get_api_db_audit_*.md 2>/dev/null | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "::warning::No GET API DB audit report found in output/"
+            exit 0
+          fi
+          echo "===== GET API DB AUDIT REPORT: ${LATEST} ====="
+          cat "${LATEST}"
+          echo "===== END OF AUDIT REPORT ====="
+          # 渲染到 Actions 页面 Summary（可直接在 run 页面查看，无需下载 artifact）
+          {
+            echo "# GET API DB Audit Report"
+            echo ""
+            echo "> 来源: ${LATEST}"
+            echo ""
+            cat "${LATEST}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload test output (audit report)
         if: always()
         uses: actions/upload-artifact@v5
