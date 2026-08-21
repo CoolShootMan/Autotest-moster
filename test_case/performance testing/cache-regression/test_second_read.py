@@ -27,6 +27,7 @@ from conftest import (
     KATANA_AUTH_HEADERS,
     BASE_URL,
 )
+from api_params import POST_DETAIL_PATH
 from dynamic_ids import (
     feature_flag_public_path,
     feature_flag_user_path,
@@ -127,4 +128,36 @@ class TestSecondReadUnverified:
             f"db={db_seq}（admin 域无 X-DB-Query-Count 埋点，DB 断言留待 BE 补齐）\n"
             f"  BE 缺口：release.admin.katana-api.1m.app 未部署 DB 计数埋点，"
             f"admin 侧 GET 无法纳入 0-DB 违规判定。"
+        )
+
+    @pytest.mark.asyncio
+    async def test_posts_consumer_detail_second_read_hits_cache(self, http_client):
+        """GET /posts/consumer/detail 连续读两次：二次读取 DB=0。
+
+        post detail 读接口是 storefront 主内容读取，冷启动 DB 高（实测 17），
+        审计中该接口每次会话仅由 dynamic_ids.curator_post_id() 触发 1 次查询，
+        无二次读取样本被标"未验证"。补预热 → 二次读取：预热后必须命中缓存，
+        否则每个访客每次进店都直连 DB 打库（大流量缓存击穿隐患）。
+        """
+        url = f"{BASE_URL}{POST_DETAIL_PATH}"
+
+        # 预热 — 允许穿透 DB
+        resp_warm = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
+        assert resp_warm.status_code == 200, (
+            f"posts/consumer/detail warm-up failed: {resp_warm.status_code} {resp_warm.text[:200]}"
+        )
+        warmup_db = get_db_queries(resp_warm)
+
+        # 验证 — 二次读取必须缓存命中（DB=0）
+        resp_verify = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
+        assert resp_verify.status_code == 200, (
+            f"posts/consumer/detail verify failed: {resp_verify.status_code} {resp_verify.text[:200]}"
+        )
+        assert_zero_db_queries(
+            resp_verify, resource=POST_DETAIL_PATH, attempt="verify", url=url,
+            warmup_db_queries=warmup_db,
+        )
+        print(
+            f"[second-read] GET {POST_DETAIL_PATH}: warmup_db={warmup_db} -> verify_db="
+            f"{get_db_queries(resp_verify)} ✓"
         )

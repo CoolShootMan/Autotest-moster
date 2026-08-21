@@ -53,11 +53,19 @@ def promoter_sub_curator_path() -> str:
     )
 
 
-CHECKOUT_GET_ENDPOINTS = [
-    {"path": "/cart?", "label": "cart-checkout"},
-    {"path": feature_setting_pdp_path(), "label": "feature-setting-pdp"},
-    {"path": promoter_sub_curator_path(), "label": "promoter-sub-curator"},
-]
+def get_checkout_endpoints() -> list[dict]:
+    """构造 checkout 链路端点列表（延迟求值）。
+
+    feature_setting_pdp_path()/promoter_sub_curator_path() 内部调用 curator_id()
+    → users/search（admin 鉴权），依赖 .env 凭据；若在模块级（import 阶段）构建，
+    CI 环境无 .env 时 pytest 收集阶段直接抛 RuntimeError（exit code 2），
+    导致整个套件不执行、审计报告残缺。故改为测试执行时才求值。
+    """
+    return [
+        {"path": "/cart?", "label": "cart-checkout"},
+        {"path": feature_setting_pdp_path(), "label": "feature-setting-pdp"},
+        {"path": promoter_sub_curator_path(), "label": "promoter-sub-curator"},
+    ]
 
 
 class TestCheckoutJourneyCache:
@@ -71,7 +79,7 @@ class TestCheckoutJourneyCache:
         GET /promoter-subscription/setting（curator 变体）。
         """
         failures = []
-        endpoints = CHECKOUT_GET_ENDPOINTS
+        endpoints = get_checkout_endpoints()
 
         # ---- 预热：允许穿透 DB ----
         for ep in endpoints:
