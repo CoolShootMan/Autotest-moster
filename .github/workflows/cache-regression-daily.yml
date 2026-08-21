@@ -1,0 +1,65 @@
+name: cache-regression-daily
+
+on:
+  schedule:
+    # 每天 10:00 北京时间（UTC 02:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  cache-regression:
+    name: cache-regression-daily-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install httpx pytest pytest-asyncio playwright
+          # SSR 用例依赖浏览器 console 抓取，需安装 chromium
+          playwright install --with-deps chromium
+
+      - name: Run cache-regression tests
+        working-directory: test_case/performance testing/cache-regression
+        run: pytest -v
+
+      - name: Print audit report to job summary
+        if: always()
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          LATEST=$(ls -t output/get_api_db_audit_*.md 2>/dev/null | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "::warning::No GET API DB audit report found in output/"
+            exit 0
+          fi
+          echo "===== GET API DB AUDIT REPORT: ${LATEST} ====="
+          cat "${LATEST}"
+          echo "===== END OF AUDIT REPORT ====="
+          # 渲染到 Actions 页面 Summary（可直接在 run 页面查看，无需下载 artifact）
+          {
+            echo "# GET API DB Audit Report"
+            echo ""
+            echo "> 来源: ${LATEST}"
+            echo ""
+            cat "${LATEST}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test output (audit report)
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: cache-regression-output
+          path: test_case/performance testing/cache-regression/output
+
+      # 失败通知：方案 B，走 GitHub 原生通知（无 SMTP）。
+      # 需将该 GitHub 账号的通知邮箱设为 linda.zhou.ext@1m.app 并开启 Actions 通知，
+      # workflow run 失败时 GitHub 会自动发邮件，无需额外配置。

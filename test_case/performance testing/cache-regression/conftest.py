@@ -5,9 +5,12 @@ cache-regression 测试套件公共配置与 Fixture。
 表示本次请求产生的数据库查询次数。缓存命中的请求该值必须为 0。
 """
 import base64
+import collections
 import json
 import os
 import uuid
+from collections import OrderedDict
+from datetime import datetime
 
 import pytest
 import httpx
@@ -62,11 +65,51 @@ KATANA_API = os.getenv("KATANA_API", "https://release.katana-api.1m.app")
 KATANA_AUTH_HEADERS = AUTH_HEADERS  # katana API 复用同一鉴权 headers
 
 
+# ---- 全局 GET 请求审计（network 层自动捞取所有 GET API） ----
+# 记录每个请求的 method/url/status/x-db-query-count，测试结束后生成审计报告，
+# 凡 GET 接口预热后仍读 DB 的，在最终报告中抛出。
+REQUEST_LOG = []
+
+
+def _record_request(method: str, url: str, status: int, db: int, source: str = "httpx"):
+    """记录一次请求到全局审计日志。"""
+    REQUEST_LOG.append(
+        {"method": method, "url": url, "status": status, "db": db, "source": source}
+    )
+
+
+def _extract_db_from_response(response: httpx.Response) -> int:
+    """从响应头提取 x-db-query-count，缺失返回 -1。"""
+    try:
+        return int(response.headers.get("X-DB-Query-Count", -1))
+    except (ValueError, TypeError):
+        return -1
+
+
+def _is_integrity_probe(url: str) -> bool:
+    """header_integrity_check 的探测请求（/feature-flag/）不纳入业务审计。"""
+    return "/feature-flag/" in url
+
+
 # ---- Fixtures ----
 @pytest.fixture(scope="function")
 async def http_client():
-    """函数级 httpx AsyncClient，避免 teardown 时 event loop 已关闭。"""
-    async with httpx.AsyncClient(timeout=30) as client:
+    """函数级 httpx AsyncClient，避免 teardown 时 event loop 已关闭。
+
+    挂 response event hook 自动捞取所有请求（GET/PATCH/PUT 均记录）
+    进入全局 REQUEST_LOG，供测试结束后的 GET API DB 审计报告使用。
+    """
+    async def _on_response(response):
+        _record_request(
+            method=response.request.method,
+            url=str(response.request.url),
+            status=response.status_code,
+            db=_extract_db_from_response(response),
+        )
+
+    async with httpx.AsyncClient(
+        timeout=30, event_hooks={"response": [_on_response]}
+    ) as client:
         yield client
 
 
@@ -335,3 +378,124 @@ def header_integrity_check():
         )
 
     # db_count > 0 → header 正常，放行
+
+
+# ---- 测试结束后的 GET API DB 审计报告 ----
+def _write_get_db_audit_report() -> str:
+    """生成 GET API DB 审计报告，返回报告文件绝对路径。
+
+    判定口径：
+    - 首次请求（冷启动/预热）DB>0 视为正常穿透，仅记录不判定违规；
+    - 同一 GET URL 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规并抛出；
+    - header_integrity_check 的 /feature-flag/ 探测请求已过滤，不纳入统计。
+    """
+    now = datetime.now()
+    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+    os.makedirs(output_dir, exist_ok=True)
+    report_path = os.path.join(output_dir, f"get_api_db_audit_{now:%Y%m%d_%H%M%S}.md")
+
+    # 筛选：GET 业务请求（排除 feature-flag 探测）
+    get_entries = [
+        e for e in REQUEST_LOG
+        if e["method"] == "GET" and not _is_integrity_probe(e["url"])
+    ]
+
+    # 按 URL 分组（保持首次出现顺序）
+    grouped = OrderedDict()
+    for e in get_entries:
+        grouped.setdefault(e["url"], []).append(e)
+
+    lines = []
+    lines.append("# GET API DB 读取审计报告")
+    lines.append("")
+    lines.append(f"- 生成时间：{now:%Y-%m-%d %H:%M:%S}")
+    lines.append(f"- GET 请求总数：{len(get_entries)}")
+    lines.append(f"- 去重 GET 接口数：{len(grouped)}")
+    lines.append("")
+
+    violations = []
+    details = []
+    for url, entries in grouped.items():
+        db_seq = [e["db"] for e in entries]
+        status_seq = [e["status"] for e in entries]
+        # 仅 2xx 响应计入 DB 判定（非 2xx 时 DB 计数不可信）
+        valid_indices = [i for i, s in enumerate(status_seq) if 200 <= s < 300]
+        # 违规：按 2xx 有效请求序列的第 2 次及以后 DB>0 判定；
+        # 首个 2xx（无论其在原始序列中的位置）视为冷启动/预热穿透，不判违规。
+        leaked = [
+            (i + 1, db_seq[i], status_seq[i])
+            for n, i in enumerate(valid_indices)
+            if n >= 1 and db_seq[i] > 0
+        ]
+        # 首次是否冷启动穿透
+        first_db = db_seq[0] if db_seq else -1
+        first_ok = 200 <= status_seq[0] < 300
+        is_violation = len(leaked) > 0
+        dist_counter = collections.Counter(db_seq)
+        dist = " | ".join(
+            f"{q}DB×{c}次" for q, c in sorted(dist_counter.items())
+        )
+        if is_violation:
+            violations.append((url, db_seq, status_seq))
+        status_mark = "违规(预热后未命中)" if is_violation else "通过"
+        details.append((url, len(entries), dist, status_mark))
+
+    lines.append(f"## 结果总览")
+    lines.append("")
+    lines.append(f"- **违规接口数（预热后仍读 DB）：{len(violations)}**")
+    lines.append("")
+    if not violations:
+        lines.append("### 全部 GET 均为 0 DB 读取（预热后缓存完全命中），无违规项。")
+        lines.append("")
+    else:
+        lines.append("## 违规接口（预热后仍读 DB，需关注）")
+        lines.append("")
+        lines.append("| # | GET URL | 请求顺序→DB数 |")
+        lines.append("|---|---------|--------------|")
+        for idx, (url, db_seq, status_seq) in enumerate(violations, 1):
+            seq_str = " → ".join(
+                f"#{i + 1}(DB={db}, HTTP={s})" for i, (db, s) in enumerate(zip(db_seq, status_seq))
+            )
+            lines.append(f"| {idx} | `{url}` | {seq_str} |")
+        lines.append("")
+
+    lines.append("## 全部 GET 明细")
+    lines.append("")
+    lines.append("| # | GET URL | 请求次数 | DB 分布 | 状态 |")
+    lines.append("|---|---------|---------|---------|------|")
+    for idx, (url, count, dist, status_mark) in enumerate(details, 1):
+        lines.append(f"| {idx} | `{url}` | {count} | {dist} | {status_mark} |")
+    lines.append("")
+
+    lines.append("## 判定口径")
+    lines.append("")
+    lines.append("- 首次请求（冷启动/预热）DB>0 视为正常穿透，仅记录不判定违规；")
+    lines.append("- 同一 GET URL 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规并抛出；")
+    lines.append("- 非 2xx 响应的 DB 计数不可信，不参与违规判定；")
+    lines.append("- header_integrity_check 的 /feature-flag/ 探测请求已过滤；")
+    lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）。")
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return report_path
+
+
+def pytest_sessionstart(session):
+    """会话开始清空请求日志，避免跨会话累积。"""
+    REQUEST_LOG.clear()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """测试结束后：tear-down 清理测试购物车 + 生成 GET API DB 审计报告。"""
+    try:
+        # tear-down：DELETE /cart 清空测试购物车，
+        # 避免每日 CI 跑测中 PUT /cart 加购导致 quantity 无限累加
+        resp = httpx.delete(f"{KATANA_API}/cart", headers=AUTH_HEADERS, timeout=15)
+        print(f"\n[tear-down] DELETE {KATANA_API}/cart -> {resp.status_code}")
+    except Exception as exc:  # 清理失败不阻断测试结果
+        print(f"\n[tear-down] DELETE /cart 失败: {exc}")
+    try:
+        report_path = _write_get_db_audit_report()
+        print(f"\n[GET API DB 审计] 报告已生成: {report_path}")
+    except Exception as exc:  # 报告生成失败不阻断测试
+        print(f"\n[GET API DB 审计] 报告生成失败: {exc}")
