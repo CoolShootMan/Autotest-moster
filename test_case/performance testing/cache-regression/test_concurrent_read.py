@@ -10,12 +10,10 @@ import pytest
 import asyncio
 from conftest import (
     get_db_queries,
-    KATANA_API,
+    BASE_URL,
     KATANA_AUTH_HEADERS,
 )
-
-CONCURRENT_COUNT = 10  # 并发数
-STORE_PATH = "/store-front/shop/resident?public=false"
+from api_params import CONCURRENT_COUNT, STORE_PATH
 
 
 class TestConcurrentRead:
@@ -26,7 +24,7 @@ class TestConcurrentRead:
         """
         预热后发起 N 个并发读取，至少 N-1 个请求必须 0 DB 查询。
         """
-        url = f"{KATANA_API}{STORE_PATH}"
+        url = f"{BASE_URL}{STORE_PATH}"
 
         # 预热
         resp_warm = await http_client.get(url, headers=KATANA_AUTH_HEADERS)

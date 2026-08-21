@@ -1,0 +1,25 @@
+category,param,value,description
+# cache-regression 环境参数表 —— prod 环境（API_ENV=prod 时读取，数据未实现，按需补齐 value 列）
+# 敏感凭据（token / 密码）不在此文件，仍由 .env 提供。
+# release 环境参数见 API_Parameter_Release.csv。
+env,BASE_URL,https://katana-api.1m.app,katana 业务 API 根地址（环境唯一根，SSR 页面/订单/promotion 均以此为根）
+env,ADMIN_URL,https://admin.katana-api.1m.app,admin 后台 API 根地址
+env,PEAR_URL,https://pear.us,Pear SSR 页面根：默认继承 BASE_URL（与 BASE_URL 同根）；仅当页面域与 API 域不同时覆盖（如 release 的 pear.us），prod 同域时留空自动取 BASE_URL（prod 值待补充）
+env,PDP_url,,商品 test 11756 的 PDP 页面链接（留空自动回退 PEAR_URL/resident/p/jjkbor）（prod 值待补充）
+shop,CURATOR_SHOP_URL,lindazhou05,curator 店铺 vanity URL（即 sign-in 请求体 subdomainVanityUrl）（prod 值待补充）
+shop,CURATOR_POST_ALIAS,11756,主 post 的 urlAlias（prod 值待补充）
+shop,POST_ALIAS_B,cache-regression-auto-test,次要 post 的 urlAlias（prod 值待补充）
+shop,CONSUMER_EMAIL,linda.zhou.ext+128@1m.app,consumer 账号邮箱（users/search 查询条件）（prod 值待补充）
+shop,CURATOR_EMAIL,linda.zhou.ext+05@1m.app,curator（promoter）账号邮箱（users/search 查询条件；与 conftest.PROMO_EMAIL 同源，原 .env 提供）（prod 值待补充）
+api,STORE_PATH,/store-front/shop/{CURATOR_SHOP_URL}?public=false,storefront 首页读接口路径
+api,POST_DETAIL_PATH,/posts/consumer/detail?vanityUrl={CURATOR_SHOP_URL}&urlAlias={CURATOR_POST_ALIAS},post detail 读接口路径
+api,POST_B_PATH,/posts/consumer/detail?vanityUrl={CURATOR_SHOP_URL}&urlAlias={POST_ALIAS_B},post B 读接口路径
+api,CART_PATH,/cart,加购（cart）接口路径
+api,FEATURE_SETTING_SIGNUP_PATH,/feature-setting/consumer-signup?lead=default,feature-setting 注册配置读接口路径（静态）
+api,PEAR_STORE_PATH,/resident,Pear SSR storefront 页面路径
+api,PEAR_POST_PATH,/resident/post/{CURATOR_POST_ALIAS},Pear SSR post detail 页面路径
+api,SIGNIN_PATH,/auth/sign-in,curator（web promoter）登录接口路径
+api,LOGIN_PATH,/auth/login,admin 登录接口路径
+api,ADMIN_PROMOTIONS_PATH,/promotions?searchTerm=&pageSize=1&pageNumber=1,admin 查询 promotions 接口路径
+test,CONCURRENT_COUNT,10,并发读取测试并发数
+test,TIMEOUT,15,HTTP 请求超时秒数
