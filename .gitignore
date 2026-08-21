@@ -163,3 +163,4 @@ test_case/UI/Test_Katana/api/prefill_vars.json
 
 # === QA performance test debug
 test_case/output
+test_case/performance testing/cache-regression/output
