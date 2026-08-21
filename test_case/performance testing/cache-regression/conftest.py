@@ -46,6 +46,10 @@ from api_params import (
 # 动态业务 id（运行时从接口查询，不写死）：CURATOR_POST_ID / promo_path() / user_b_token()
 from dynamic_ids import _admin_headers, _admin_token, guest_token, promo_path, user_b_token
 
+# 统一 HTTP 审计模块：所有请求（http_client fixture / dynamic_ids 裸调用 / Playwright 页面
+# 响应）集中记录到 REQUEST_LOG，测试结束后生成 GET API DB 审计报告。
+from audit_http import REQUEST_LOG, get_async_client, get_sync_client, record_request
+
 # curator（promoter）登录账号邮箱（敏感凭据由 .env 提供）
 PROMO_EMAIL = CURATOR_EMAIL
 
@@ -74,30 +78,26 @@ KATANA_AUTH_HEADERS = AUTH_HEADERS  # katana API 复用同一鉴权 headers
 
 
 # ---- 全局 GET 请求审计（network 层自动捞取所有 GET API） ----
-# 记录每个请求的 method/url/status/x-db-query-count，测试结束后生成审计报告，
-# 凡 GET 接口预热后仍读 DB 的，在最终报告中抛出。
-REQUEST_LOG = []
-
+# 请求日志统一由 audit_http.REQUEST_LOG 维护：http_client fixture（event hook）、
+# dynamic_ids 裸调用（audit_http.get_sync_client()）、Playwright 页面响应
+# （navigate_pear_page 的 response 监听）三类来源全部汇入同一日志，
+# 使"预热后二次读取仍读 DB"的审计覆盖到全部真实 GET，不再有盲区。
+# 兼容引用：保留 conftest._record_request 名称，实际指向 audit_http 的统一实现；
+# conftest.REQUEST_LOG 即 audit_http.REQUEST_LOG（见上方 import）。
 
 def _record_request(method: str, url: str, status: int, db: int, source: str = "httpx"):
-    """记录一次请求到全局审计日志。"""
-    REQUEST_LOG.append(
-        {"method": method, "url": url, "status": status, "db": db, "source": source}
-    )
+    """记录一次请求到全局审计日志（audit_http 统一实现）。"""
+    record_request(method=method, url=url, status=status, db=db, source=source)
 
 
 def _is_integrity_probe(url: str) -> bool:
-    """header_integrity_check 的探测请求（/feature-flag/）不纳入业务审计。"""
-    return "/feature-flag/" in url
+    """历史遗留：早期按 /feature-flag/ 子串过滤探测请求。
 
-
-def _is_diagnostic_get(url: str) -> bool:
-    """cart 类 GET 归为诊断性：购物车加载会实时读 DB（含 promotion 配置计算），
-    读 DB 属期望业务行为，不适用「缓存命中 DB=0」口径，不判违规。
-
-    仅用于审计报告分类（诊断小节），不影响其他 GET 的缓存命中判定。
+    已废弃：header_integrity_check 的探测请求使用独立 httpx.get（不经 event hook），
+    天然不进 REQUEST_LOG；而 storefront 真实业务接口 feature-flag-user /
+    feature-flag-public 是合法业务 GET，不应被过滤。故恒返回 False，仅保留占位。
     """
-    return "/cart" in url
+    return False
 
 
 # ---- Fixtures ----
@@ -105,20 +105,10 @@ def _is_diagnostic_get(url: str) -> bool:
 async def http_client():
     """函数级 httpx AsyncClient，避免 teardown 时 event loop 已关闭。
 
-    挂 response event hook 自动捞取所有请求（GET/PATCH/PUT 均记录）
-    进入全局 REQUEST_LOG，供测试结束后的 GET API DB 审计报告使用。
+    复用 audit_http.get_async_client()（挂 response event hook 自动捞取所有请求
+    GET/PATCH/PUT/POST 均记录）进入全局 REQUEST_LOG，供审计报告使用。
     """
-    async def _on_response(response):
-        _record_request(
-            method=response.request.method,
-            url=str(response.request.url),
-            status=response.status_code,
-            db=get_db_queries(response),
-        )
-
-    async with httpx.AsyncClient(
-        timeout=30, event_hooks={"response": [_on_response]}
-    ) as client:
+    async with get_async_client() as client:
         yield client
 
 
@@ -152,7 +142,7 @@ def _curator_signin() -> str:
     注意：sign-in token TTL 约 2 分钟，故每次使用前动态签发最可靠；
     测试过程中由 promo_auth_headers fixture 复用会话级 token。
     """
-    resp = httpx.post(
+    resp = get_sync_client().post(
         f"{BASE_URL}/auth/sign-in",
         json={
             "email": PROMO_EMAIL,
@@ -193,11 +183,41 @@ async def pear_context():
     await pw.stop()
 
 
+def attach_pear_page_audit(page) -> None:
+    """给 Playwright 页面挂 response 监听：带 x-db-query-count 的响应写入全局审计日志。
+
+    覆盖 SSR 文档请求与页面内 XHR（如 GET /cart、feature-setting-public 等），
+    使浏览器侧真实 GET 也纳入"预热后二次读取仍读 DB"审计（source=playwright）。
+    与 navigate_pear_page 的 console 抓取互不冲突：本监听负责全量记录，
+    console 抓取只负责提取该页面的代表值。
+    """
+    def _on_page_response(response):
+        db_raw = response.headers.get("x-db-query-count")
+        if db_raw is None:
+            return
+        try:
+            db = int(db_raw)
+        except (ValueError, TypeError):
+            db = -1
+        _record_request(
+            method=response.request.method,
+            url=response.url,
+            status=response.status,
+            db=db,
+            source="playwright",
+        )
+
+    page.on("response", _on_page_response)
+
+
 async def navigate_pear_page(context, path: str) -> tuple[int, int]:
     """用 Playwright 导航 Pear SSR 页面，从 console.log 抓取 x-db-query-count。
 
     通过 msg.args[5]（response headers dict）直接读取 x-db-query-count，
     不再依赖 msg.text + 正则（msg.text 有 ~150 chars 截断限制）。
+
+    同时挂 attach_pear_page_audit 监听，将页面所有带 x-db-query-count 的响应
+    （SSR + XHR）记入全局审计日志。
 
     Args:
         context: Playwright browser context
@@ -209,6 +229,7 @@ async def navigate_pear_page(context, path: str) -> tuple[int, int]:
     from playwright.async_api import Page
 
     page: Page = await context.new_page()
+    attach_pear_page_audit(page)
     count = -1
     _console_msgs: list = []  # 收集候选 console 消息，稍后异步提取 args
 
@@ -390,49 +411,51 @@ def header_integrity_check():
 
 
 # ---- 测试结束后的 GET API DB 审计报告 ----
+def _normalize_url(url: str) -> str:
+    """URL 归一化：去除尾部空 query（如 `cart?` → `cart`），避免同接口被拆散。"""
+    return url[:-1] if url.endswith("?") else url
+
+
 def _write_get_db_audit_report() -> str:
     """生成 GET API DB 审计报告，返回报告文件绝对路径。
 
     判定口径：
-    - 首次请求（冷启动/预热）DB>0 视为正常穿透，仅记录不判定违规；
-    - 同一 GET URL 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规并抛出；
-    - header_integrity_check 的 /feature-flag/ 探测请求已过滤，不纳入统计。
+    - 同一归一化 GET URL 的 2xx 请求序列中，第 1 次（冷启动/预热）DB>0 视为正常穿透；
+    - 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规（大流量涌入时会打到 DB，风险接口）；
+    - 仅 1 次 2xx 请求的接口：无二次读取样本，标记"未验证"，不判通过也不判违规；
+    - 非 2xx 响应的 DB 计数不可信，不参与违规判定；
+    - 请求来源含 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类
+      （source ∈ {httpx, playwright}），全部纳入统计，不再有审计盲区。
     """
     now = datetime.now()
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
     os.makedirs(output_dir, exist_ok=True)
     report_path = os.path.join(output_dir, f"get_api_db_audit_{now:%Y%m%d_%H%M%S}.md")
 
-    # 筛选：GET 业务请求（排除 feature-flag 探测）
-    get_entries = [
-        e for e in REQUEST_LOG
-        if e["method"] == "GET" and not _is_integrity_probe(e["url"])
-    ]
+    # 筛选：GET 业务请求（探测请求本就经独立 httpx 发出、不进日志，无需再过滤）
+    get_entries = [e for e in REQUEST_LOG if e["method"] == "GET"]
 
-    # 按 URL 分组（保持首次出现顺序）
+    # 按归一化 URL 分组（保持首次出现顺序）
     grouped = OrderedDict()
     for e in get_entries:
-        grouped.setdefault(e["url"], []).append(e)
+        grouped.setdefault(_normalize_url(e["url"]), []).append(e)
+
+    source_counter = collections.Counter(e["source"] for e in REQUEST_LOG)
 
     lines = []
     lines.append("# GET API DB 读取审计报告")
     lines.append("")
     lines.append(f"- 生成时间：{now:%Y-%m-%d %H:%M:%S}")
+    lines.append(f"- 请求来源分布：{dict(source_counter)}")
     lines.append(f"- GET 请求总数：{len(get_entries)}")
     lines.append(f"- 去重 GET 接口数：{len(grouped)}")
     lines.append("")
 
-    # cart 类 GET 归诊断性（读 DB 属期望行为，不判违规）
-    business_grouped = OrderedDict(
-        (u, e) for u, e in grouped.items() if not _is_diagnostic_get(u)
-    )
-    diag_grouped = OrderedDict(
-        (u, e) for u, e in grouped.items() if _is_diagnostic_get(u)
-    )
-
     violations = []
+    unverified = []
+    passed = []
     details = []
-    for url, entries in business_grouped.items():
+    for url, entries in grouped.items():
         db_seq = [e["db"] for e in entries]
         status_seq = [e["status"] for e in entries]
         # 仅 2xx 响应计入 DB 判定（非 2xx 时 DB 计数不可信）
@@ -444,7 +467,6 @@ def _write_get_db_audit_report() -> str:
             for n, i in enumerate(valid_indices)
             if n >= 1 and db_seq[i] > 0
         ]
-        # 首次是否冷启动穿透
         first_db = db_seq[0] if db_seq else -1
         first_ok = 200 <= status_seq[0] < 300
         is_violation = len(leaked) > 0
@@ -452,16 +474,24 @@ def _write_get_db_audit_report() -> str:
         dist = " | ".join(
             f"{q}DB×{c}次" for q, c in sorted(dist_counter.items())
         )
+        n_2xx = len(valid_indices)
         if is_violation:
+            status_mark = "违规(预热后未命中)"
             violations.append((url, db_seq, status_seq))
-        status_mark = "违规(预热后未命中)" if is_violation else "通过"
+        elif n_2xx < 2:
+            # 仅 1 次 2xx 请求：无二次读取样本，无法验证预热后是否命中缓存
+            status_mark = "未验证(仅1次请求)"
+            unverified.append((url, len(entries), dist, status_mark))
+        else:
+            status_mark = "通过(预热后DB=0)"
+            passed.append((url, len(entries), dist, status_mark))
         details.append((url, len(entries), dist, status_mark))
 
     lines.append(f"## 结果总览")
     lines.append("")
     lines.append(f"- **违规接口数（预热后仍读 DB）：{len(violations)}**")
-    if diag_grouped:
-        lines.append(f"- 诊断性 GET（cart 读 DB 属期望行为，不判违规）：{len(diag_grouped)}")
+    lines.append(f"- 未验证接口数（仅 1 次请求，无二次读取样本）：{len(unverified)}")
+    lines.append(f"- 通过接口数（预热后 DB=0）：{len(passed)}")
     lines.append("")
     if not violations:
         lines.append("### 全部 GET 均为 0 DB 读取（预热后缓存完全命中），无违规项。")
@@ -478,6 +508,14 @@ def _write_get_db_audit_report() -> str:
             lines.append(f"| {idx} | `{url}` | {seq_str} |")
         lines.append("")
 
+    lines.append("## 未验证接口（仅 1 次请求，大流量前建议补二次读取验证）")
+    lines.append("")
+    lines.append("| # | GET URL | 请求次数 | DB 分布 |")
+    lines.append("|---|---------|---------|---------|")
+    for idx, (url, count, dist, _) in enumerate(unverified, 1):
+        lines.append(f"| {idx} | `{url}` | {count} | {dist} |")
+    lines.append("")
+
     lines.append("## 全部 GET 明细")
     lines.append("")
     lines.append("| # | GET URL | 请求次数 | DB 分布 | 状态 |")
@@ -486,37 +524,14 @@ def _write_get_db_audit_report() -> str:
         lines.append(f"| {idx} | `{url}` | {count} | {dist} | {status_mark} |")
     lines.append("")
 
-    # ---- 诊断性 GET（cart）明细 ----
-    # GET /cart 加载购物车时服务端会实时读 DB（含 promotion 配置计算），
-    # 读 DB 属期望业务行为，不适用「缓存命中 DB=0」口径，不判违规。
-    if diag_grouped:
-        lines.append("## 诊断性 GET（cart 读 DB 属期望行为，不判违规）")
-        lines.append("")
-        lines.append("- GET /cart 加载购物车会实时读 DB（含 promotion 配置计算），读 DB 是期望业务行为，")
-        lines.append("  不适用「缓存命中 DB=0」口径，仅记录 DB 分布供诊断，不判违规。")
-        lines.append("")
-        lines.append("| # | GET URL | 请求次数 | DB 分布 |")
-        lines.append("|---|---------|---------|---------|")
-        for idx, (url, entries) in enumerate(diag_grouped.items(), 1):
-            db_seq = [e["db"] for e in entries]
-            dist_counter = collections.Counter(db_seq)
-            dist = " | ".join(
-                f"{q}DB×{c}次" for q, c in sorted(dist_counter.items())
-            )
-            lines.append(f"| {idx} | `{url}` | {len(entries)} | {dist} |")
-        lines.append("")
-
     # ---- 写接口（PUT/PATCH/POST）DB 读取明细 ----
     # 写接口读 DB 是期望行为，不判违规；此处用于暴露 promotion/coupon 读取实际发生在
     # 哪条接口——例如 PUT /cart 加购时 promotion service 自动读 coupon 计算折扣
     # （totalCouponDiscount 即其产物），该 DB 查询不在独立 GET 接口上。
-    write_entries = [
-        e for e in REQUEST_LOG
-        if e["method"] != "GET" and not _is_integrity_probe(e["url"])
-    ]
+    write_entries = [e for e in REQUEST_LOG if e["method"] != "GET"]
     write_grouped = OrderedDict()
     for e in write_entries:
-        key = f"{e['method']} {e['url']}"
+        key = f"{e['method']} {_normalize_url(e['url'])}"
         write_grouped.setdefault(key, []).append(e)
 
     lines.append("## 写接口（PUT/PATCH/POST）DB 读取明细")
@@ -540,11 +555,11 @@ def _write_get_db_audit_report() -> str:
 
     lines.append("## 判定口径")
     lines.append("")
-    lines.append("- 首次请求（冷启动/预热）DB>0 视为正常穿透，仅记录不判定违规；")
-    lines.append("- 同一 GET URL 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规并抛出；")
-    lines.append("- GET /cart 归诊断性：购物车加载实时读 DB（含 promotion 配置计算）属期望行为，不判违规；")
+    lines.append("- 同一归一化 GET URL 的 2xx 请求序列中，第 1 次（冷启动/预热）DB>0 视为正常穿透；")
+    lines.append("- 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规；")
+    lines.append("- 仅 1 次 2xx 请求的接口标记'未验证'（无二次读取样本，不判通过/违规）；")
     lines.append("- 非 2xx 响应的 DB 计数不可信，不参与违规判定；")
-    lines.append("- header_integrity_check 探测请求不经事件钩子，不进入本日志；")
+    lines.append("- 请求来源覆盖 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类；")
     lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）。")
 
     with open(report_path, "w", encoding="utf-8") as f:
@@ -589,7 +604,7 @@ def _admin_find_promotion_id(title: str, description: str = "") -> str:
     url = f"{ADMIN_URL}/promotions?searchTerm={quote(search)}&pageSize=20&pageNumber=1"
 
     def _query(headers: dict) -> tuple[int, list]:
-        resp = httpx.get(url, headers=headers, timeout=20)
+        resp = get_sync_client().get(url, headers=headers, timeout=20)
         if resp.status_code != 200:
             return resp.status_code, []
         data = resp.json()
@@ -639,7 +654,7 @@ def _clear_promotions() -> None:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
         }
-        patch = httpx.patch(
+        patch = get_sync_client().patch(
             promo_path(),
             headers=promo_headers,
             json={"announcements": [], "promotions": [], "hideCouponBox": False},
@@ -655,7 +670,7 @@ def pytest_sessionfinish(session, exitstatus):
     try:
         # tear-down：DELETE /cart 清空测试购物车，
         # 避免每日 CI 跑测中 PUT /cart 加购导致 quantity 无限累加
-        resp = httpx.delete(f"{BASE_URL}/cart", headers=AUTH_HEADERS, timeout=15)
+        resp = get_sync_client().delete(f"{BASE_URL}/cart", headers=AUTH_HEADERS, timeout=15)
         print(f"\n[tear-down] DELETE {BASE_URL}/cart -> {resp.status_code}")
     except Exception as exc:  # 清理失败不阻断测试结果
         print(f"\n[tear-down] DELETE /cart 失败: {exc}")

@@ -27,8 +27,12 @@ import re
 import uuid
 from functools import lru_cache
 
-import httpx
 from dotenv import load_dotenv
+
+# 统一审计 client：dynamic_ids 的辅助查询（POST_DETAIL / PDP SSR / admin search /
+# product-event/list 等）全部经 audit_http 记录进全局 REQUEST_LOG，
+# 使这些真实 GET 也纳入"预热后二次读取仍读 DB"审计，不再成为盲区。
+from audit_http import get_sync_client
 
 from api_params import (
     ADMIN_URL,
@@ -68,7 +72,7 @@ def _curator_token() -> str:
         raise RuntimeError("CURATOR_EMAIL / CURATOR_PASSWORD 未配置（.env），无法 curator sign-in")
     if not _re.fullmatch(r"[0-9a-fA-F]{32}", password):
         password = hashlib.md5(password.encode()).hexdigest()
-    resp = httpx.post(
+    resp = get_sync_client().post(
         f"{BASE_URL}/auth/sign-in",
         json={
             "email": email,
@@ -109,7 +113,7 @@ def curator_post_id() -> str:
 
     进程内只查询一次（lru_cache），post id 在运行期间不变。
     """
-    resp = httpx.get(
+    resp = get_sync_client().get(
         f"{BASE_URL}{POST_DETAIL_PATH}",
         headers=_post_detail_headers(),
         timeout=20,
@@ -136,7 +140,7 @@ def product_variant_id() -> str:
     替代 test_promotion.py 写死的 promoterProductVariantId（28227f32...），
     运行时从 post detail 的第一个关联商品动态获取，避免环境 id 漂移。
     """
-    resp = httpx.get(
+    resp = get_sync_client().get(
         f"{BASE_URL}{POST_DETAIL_PATH}",
         headers=_post_detail_headers(),
         timeout=20,
@@ -173,7 +177,7 @@ def admin_pdp_product_id() -> str:
     import urllib.parse
 
     query = urllib.parse.quote("test 11756")
-    resp = httpx.get(
+    resp = get_sync_client().get(
         f"{ADMIN_URL}/merchant/product/search?query={query}",
         headers=_admin_headers(),
         timeout=20,
@@ -205,7 +209,7 @@ def admin_pdp_variant_id() -> str:
 
     注意：与 consumer 加购用的 displayVariantId（pdp_product_variant_id）不同，切勿混用。
     """
-    resp = httpx.get(
+    resp = get_sync_client().get(
         f"{ADMIN_URL}/merchant/product/{admin_pdp_product_id()}",
         headers=_admin_headers(),
         timeout=20,
@@ -238,7 +242,7 @@ def pdp_product_variant_id() -> str:
     test 11756 的 displayVariantId），运行时从 PDP 页面 HTML 的
     __NEXT_DATA__ 内嵌 JSON（product.displayVariantId）解析，避免环境 id 漂移。
     """
-    resp = httpx.get(PDP_URL, timeout=20, follow_redirects=True)
+    resp = get_sync_client().get(PDP_URL, timeout=20, follow_redirects=True)
     resp.raise_for_status()
     html = resp.text
     # PDP SSR 内嵌 JSON 以转义形式出现（\\"displayVariantId\\":\\"...\\"），
@@ -270,7 +274,7 @@ def _admin_token() -> str:
         raise RuntimeError(
             "ADMIN_EMAIL / ADMIN_PASSWORD 未设置（.env），无法登录 admin 获取用户 id。"
         )
-    resp = httpx.post(
+    resp = get_sync_client().post(
         f"{ADMIN_URL}/auth/login",
         json={"email": email, "password": password},
         headers={
@@ -317,7 +321,7 @@ def _search_user(email: str) -> str:
         "pageSize": 100,
         "pageNumber": 1,
     }
-    resp = httpx.post(f"{ADMIN_URL}/users/search", json=body, headers=headers, timeout=20)
+    resp = get_sync_client().post(f"{ADMIN_URL}/users/search", json=body, headers=headers, timeout=20)
     payload = resp.json()
     if payload.get("code") != 200:
         raise RuntimeError(
@@ -366,7 +370,7 @@ def _user_b_guest() -> tuple:
     与 conftest.header_integrity_check 完全同模式，保证每次会话都是全新 guest、id 不写死。
     """
     consumer_id = str(uuid.uuid4())
-    resp = httpx.post(
+    resp = get_sync_client().post(
         f"{BASE_URL}/auth/guest-login",
         json={"consumerId": consumer_id},
         timeout=10,
@@ -434,7 +438,7 @@ def event_id() -> str:
     注意：list 按店铺维度过滤，guest 视角恒为空，必须用 curator sign-in token 查询。
     """
     event_title = os.getenv("EVENT_TITLE", "cache regression - auto test")
-    resp = httpx.get(
+    resp = get_sync_client().get(
         f"{BASE_URL}/product-event/list?keyword=&pageSize=50&pageNumber=1",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {_curator_token()}"},
         timeout=20,
