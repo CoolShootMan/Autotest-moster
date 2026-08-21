@@ -110,6 +110,15 @@ def handle_create_post_edu(page: "Page", base_url: str) -> None:
         except Exception:
             pass
 
+    # allow Promoters Resell
+    try:
+        page.get_by_role("checkbox", name="allowPromotersResell").click(timeout=1000)
+        page.wait_for_timeout(200)
+        dismiss_edu_popups(page)
+    except Exception:
+        pass
+
+    
     # Click enhance CTA to trigger product-selection EDU
     try:
         page.get_by_test_id("enhance-button-cta").click(timeout=1000)
@@ -120,7 +129,7 @@ def handle_create_post_edu(page: "Page", base_url: str) -> None:
 
     #Click enhance CTA to trigger product-selection EDU
     try:
-        page.get_by_test_id("ExpandMoreIcon").click(timeout=1000)
+        page.get_by_test_id("ExpandMoreIcon").click(timeout=2000)
         page.wait_for_timeout(200)
         dismiss_edu_popups(page)
     except Exception:
@@ -182,13 +191,13 @@ def handle_selling_customize(page: "Page") -> None:
     # The button label on the Selling page is just "Customize" (not "Customize products"),
     # so we use a regex match — old code's exact match silently failed and downstream
     # "Done" clicks never ran, leaving "Choose a resale model" EDU un-dismissed.
-    try:
-        import re
-        page.get_by_role("button", name=re.compile(r"^Customize$", re.I)).first.click(timeout=1500)
-        page.wait_for_timeout(300)
-        dismiss_edu_popups(page)
-    except Exception:
-        pass
+    # try:
+    #     import re
+    #     page.get_by_role("button", name=re.compile(r"^Customize$", re.I)).first.click(timeout=1500)
+    #     page.wait_for_timeout(300)
+    #     dismiss_edu_popups(page)
+    # except Exception:
+    #     pass
 
     # After clicking Customize, the "Choose a resale model" EDU popover can appear
     # before the user hits "Start Customizing". Dismiss it eagerly here so it doesn't

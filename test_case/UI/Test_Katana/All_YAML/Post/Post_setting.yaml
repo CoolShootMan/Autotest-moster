@@ -294,7 +294,8 @@ testT3683_T3684:
 
         # Step 7: Select product "General Admission 01", click its Buy Ticket button
         R_click_buy_ticket_ga01: { near_text: "General Admission 01", role: 'button', name: 'Buy Ticket', index: 0 }
-        sleep_step: 2000
+        sleep_step: 1500
+        smart_click_optional_buy_now: { role: 'button', name: 'Buy now', timeout: 3000 }
 
         # Step 7: Click Continue to enter Contact info page
         R_click_continue: { role: 'button', name: 'Continue' }
@@ -480,7 +481,8 @@ testT3686_CosellerResell:
 
         # T3686 Step 5: Guest clicks Buy Ticket (from Coseller's shop General Admission 01)
         R_click_buy_ticket_ga01: { near_text: "General Admission 01", role: 'button', name: 'Buy Ticket', index: 0 }
-        sleep_step: 2000
+        sleep_step: 1500
+        smart_click_optional_buy_now: { role: 'button', name: 'Buy now', timeout: 3000 }
 
         # T3686 Step 7: Click Continue to enter Contact info page
         R_click_continue: { role: 'button', name: 'Continue' }
@@ -584,7 +586,10 @@ testT2705_VerifyPartner:
 
     # Step 4: Click "No" (skip co-sellers)
     R_click_no: { role: "button", name: "No" }
-    sleep_step: 2000
+    sleep_step: 3000
+
+    smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 6000 }
+    sleep_step: 500
 
     # Step 5: Click "Select" button.
     R_click_select_products: { role: "button", name: "Select" }
@@ -746,6 +751,11 @@ testT2705_VerifyGuest:
     # Step 4: Click "Add products"
     R_click_add_products: { role: "button", name: "Add products" }
     sleep_step: 2000
+
+    fill_product_search_4: { locator: 'input[placeholder="Search..."]', value: 'test_general_products' }
+    sleep_step: 500
+    press_search_4: { key: "Enter" }
+    sleep_step: 1500
 
     # Step 5: Click product_img
     click_product_img: { test_id: 'SquareLineIcon', index: 0 }
@@ -909,25 +919,7 @@ testT2834_VerifyPartner:
         R_click_post: { role: "button", name: "verify-post-shipping-fee", index: 0 }
         sleep_step: 2000
 
-        # Step 2: Click "Edit style" button (navigates to /post/{id}/view Edit post style page)
-        click_edit_style: { role: "button", name: "Edit style" }
-        sleep_step: 2500
-        # Layout tab (verified 2026-08-10: Color/Font/Layout tabs; Layout has a combobox with options
-        # Spotlight/Side-by-Side/Triple Feature/Collection/Text First/Story Only)
-        R_click_layout_tab: { role: "tab", name: "Layout", exact: true }
-        sleep_step: 1000
-        R_click_layout_combobox: { role: "combobox" }
-        sleep_step: 500
-        R_click_spotlight_opt: { role: "option", name: "Spotlight" }
-        sleep_step: 500
-        R_click_update: { role: "button", name: "Update" }
-        sleep_step: 3000
-        # Edit style navigates to a full page; Back returns to the post editor drawer
-        # (Back button has aria-label="Back", no visible text)
-        R_click_back: { role: "button", name: "Back" }
-        sleep_step: 3500
-
-        # Step 3: Switch to Selling tab and customize products
+        # Step 2: Switch to Selling tab and customize products
         R_click_selling_tab: { role: "tab", name: "Selling", exact: true }
         sleep_step: 2000
         #smart_click_optional_start_customizing: { role: 'button', name: 'Start Customizing' }
@@ -935,7 +927,7 @@ testT2834_VerifyPartner:
         R_click_select_products: { test_id: "enhance-button-cta" }
         sleep_step: 1000
 
-        # Step 4: Add product
+        # Step 3: Add product
         # First search for "test_general_products" to make target card only visible
         fill_product_search_1: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
         sleep_step: 500
@@ -946,7 +938,7 @@ testT2834_VerifyPartner:
         # At this time only one card, directly click using role+name, no index needed
         click_product_card_1: { test_id: 'SquareLineIcon', index: 0 }
 
-        # Step 5: Check Free Shipping checkbox
+        # Step 4: Check Free Shipping checkbox
         
         sleep_step: 500
         click_add_product_btn_1: { role: 'button', name: 'product(s)' }
@@ -959,17 +951,59 @@ testT2834_VerifyPartner:
         sleep_step: 1000
         check_free_shipping: { locator: 'input[name="products.1.isFreeShipping"]', checked: true }
 
-        # Step 6: Save changes
+        # Step 5: Save changes
         R_click_save: { role: "button", name: "Save" }
         sleep_step: 1000
         R_click_save_again: { role: "button", name: "Save" }
+        sleep_step: 3000
+
+        # Step 6: Click "Edit content" button (navigates to /post/{id}/view Edit post content page)
+        R_click_content_tab: { role: "tab", name: "Content", exact: true }
+        sleep_step: 500
+        click_edit_content: { role: "button", name: "Edit content" }
+        sleep_step: 2500
+        R_click_insert_button: { role: "button", name: "Insert" }
+        sleep_step: 500
+
+        move_to_event:
+            move_relative_to_selector:
+                locator: '[role="menuitem"]:has-text("CTA Elements")'
+                x: "center"
+                y: "center"
+        sleep_step: 1000
+
+        move_to_insert_CTA_Product_Banner:
+            move_relative_to_selector:
+                locator: '[role="menuitem"]:has-text("CTA Product Banner")'
+                x: "center"
+                y: "center"
+        sleep_step: 1000
+
+        R_click_insert_Product_Banner: { name: "CTA Product Banner" }
+        sleep_step: 500
+
+        # click RoundLineIcon or RadioButtonUncheckedIcon
+        R_click_Unchecked_Icon: { locator: '[data-testid="RoundLineIcon"]', index: 1 }
+        sleep_step: 500
+        R_click_insert_1: { role: "button", name: "Insert" }
+        sleep_step: 500
+        R_click_ExpandMore_Icon: { locator: '[data-testid="ExpandMoreIcon"]', index: 1 }
+        sleep_step: 500
+        R_click_menu_item: { locator: '[data-testid="menu-item"]', index: 1 }
+        sleep_step: 500
+        R_click_insert_2: { role: "button", name: "Insert" }
+        sleep_step: 500
+        R_click_update_post: { role: "button", name: "Update" }
+        sleep_step: 1500
+
+        R_click_confirm_update: { role: "button", name: "Update" }
         sleep_step: 3000
         
     expect_result:
         description: "Post products updated successfully"
         assertions:
             - assertion_type: "element_visible_by_text"
-              text: "Post products updated"
+              text: "Post published"
 
 
 testT2834_VerifyGuest:
@@ -995,7 +1029,7 @@ testT2834_VerifyGuest:
         sleep_step: 500
         
         # Step 3: Add to Cart / Buy Now
-        R_click_buy_now: { role: "button", name: "RSVP" }
+        R_click_buy_now: { role: "button", name: "Buy now" }
         sleep_step: 3000
 
         # Verify in order drawer / paragraph
@@ -1013,7 +1047,7 @@ testT2834_VerifyGuest:
         # Address dropdown selection
         fill_address: { role: "textbox", name: "e.g. 123 Main St, Austin, TX", value: "ca" }
         sleep_step: 2000
-        R_click_address_option: { role: "button", name: "Cannon Drive, Columbus, OH, USA" }
+        R_click_address_option: { role: "button", name: "Carlton Ave, Columbus, OH, USA" }
         sleep_step: 1000
 
         #fill_zipcode: { locator: 'input[name="address.zipcode"]', value: "40012" }
@@ -1021,11 +1055,11 @@ testT2834_VerifyGuest:
         fill_email: { locator: 'input[name="contact.email"]', value: "fos.zyx@gmail.com" }
         sleep_step: 1000
 
-        R_click_place_order: { role: "button", name: "RSVP" }
+        R_click_place_order: { role: "button", name: "Place order" }
         sleep_step: 1500
 
         # Step 5: Post-purchase expand details
-        verify_order_confirmationh: { text: "Thank you! Your order is confirmed" }
+        verify_order_confirmationh: { text: "Thank you for your payment" }
         R_click_expand_details: { test_id: "ExpandMoreIcon", index: 0 }
         sleep_step: 1000
 
@@ -1057,16 +1091,16 @@ testT2834_VerifyGuest:
         R_click_customize_products_teardown: { test_id: "enhance-button-cta" }
         sleep_step: 1500
         # First search for "test_general_products" to make target card only visible
-        fill_product_search_2: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
+        fill_product_search: { locator: 'input[placeholder="Search product"]', value: 'test_general_products' }
         sleep_step: 500
         # Select-products dialog Search button has NO accessible name -> trigger search via Enter
         # (mirrors T2874/T2834_VerifyPartner/T5033 verified pattern; clicking role=button name=Search fails)
         press_search_2: { key: "Enter" }
         sleep_step: 2000
         # At this time only one card, directly click using role+name, no index needed
-        click_product_card_2: { test_id: 'SquareLineIcon', index: 0 }
+        click_product_card_2: { test_id: 'CheckboxFillIcon', index: 0 }
         sleep_step: 1000
-        click_add_product_btn_2: { role: 'button', name: 'Add 1/20 product(s)' }
+        click_add_product_btn_2: { role: 'button', name: 'product(s)' }
         sleep_step: 1500
         R_click_save_teardown: { role: "button", name: "Save" }
         sleep_step: 1000
@@ -1142,7 +1176,7 @@ testT4735_VerifyGuest:
         open:
           url: "{BASE_URL}/autotestshop/post/test-event-post-variant-settings"
           auto_handle_modals: false
-        sleep_after_open: 5000
+        sleep_after_open: 8000
 
         # Wait for popup and click "demi test" span using XPath (note: lowercase)
         wait_for_popup_text: { locator: "//span[@data-testid='mui-typography']", timeout: 10000 }
@@ -1279,7 +1313,10 @@ testT2515_VerifyDisabled_WithVariant:
 
         # Step 3: Click General Admission product name to open detail drawer
         R_click_product_name_first: { locator: "text=General Admission" }
-        sleep_step: 3000
+        sleep_step: 1500
+
+        swipe: { x: 0, y: 500 }
+        sleep_step: 1000
 
         # Step 4: Select variant "5 people", set qty=2, Add to cart
         R_click_variant_5people: { locator: "text=5 people" }
@@ -1436,7 +1473,7 @@ testT2874_EnableDependentProducts:
         sleep_step: 2000
 
         # Step 7: In popup, click the product image (user confirmed: clicking image works)
-        R_click_select_required_product: { test_id: 'SquareLineIcon', index: 0 }
+        R_click_select_required_product: { test_id: 'SquareLineIcon', index: 1 }
         sleep_step: 2000
 
         # Step 8: Click Confirm in popup
@@ -1476,15 +1513,16 @@ testT2874_VerifyGuestCheckoutTwo:
         # sleep_step: 1000
 
         # Step 3: Click General Admission 001 product name to open detail drawer
-        R_click_product_name_first: { role: "button", name: "Buy Ticket" }
+        R_click_product_name_first: { role: "button", name: "Buy Ticket", exact: true }
         sleep_step: 3000
 
-        # Step 4: Click Add to cart - triggers popup showing General Admission 002
+        # Step 4: Click Add to cart - triggers popup showing test_general_products
         # R_click_add_to_cart_first: { role: "button", name: "Add to cart" }
         # sleep_step: 3000
 
-        # Step 5: Verify popup shows General Admission 002
-        verify_text_visible: { text: "General Admission 002" }
+        # Step 5: Verify popup shows test_general_products
+        verify_text_visible: { text: "test_general_products" }
+        sleep_step: 1000
         R_click_increase_quantity: { role: "button", name: "Increase quantity" }
         sleep_step: 1000
 
@@ -1501,17 +1539,17 @@ testT2874_VerifyGuestCheckoutTwo:
         sleep_step: 3000
 
         # Step 9: Fill Contact info
-        fill_first_name: { locator: 'input[name="contact.firstName"]', value: 'Test' }
-        sleep_step: 500
-        fill_last_name: { locator: 'input[name="contact.lastName"]', value: 'User' }
-        sleep_step: 500
-        fill_phone: { role: "textbox", name: "Phone number", value: '+1 (650) 900-6646' }
-        sleep_step: 500
+        # fill_first_name: { locator: 'input[name="contact.firstName"]', value: 'Test' }
+        # sleep_step: 500
+        # fill_last_name: { locator: 'input[name="contact.lastName"]', value: 'User' }
+        # sleep_step: 500
+        # fill_phone: { role: "textbox", name: "Phone number", value: '+1 (650) 900-6646' }
+        # sleep_step: 500
         fill_email: { locator: 'input[name="contact.email"]', value: 'xuan.ext+123@1m.app' }
         sleep_step: 500
 
         # Step 10: Place order
-        R_click_place_order: { role: "button", name: "RSVP" }
+        R_click_place_order: { role: "button", name: "Place order" }
         wait_for_url: { url: "*order*", timeout: 15000 }
         sleep_step: 2000
 
@@ -1525,7 +1563,7 @@ testT2874_VerifyGuestCheckoutTwo:
             - assertion_type: "element_visible_by_text"
               text: "General Admission 001"
             - assertion_type: "element_visible_by_text"
-              text: "General Admission 002"
+              text: "test_general_products"
 
     teardown_step:
         # Step 1: Inject partner cookies to switch to partner context
@@ -1697,7 +1735,7 @@ testT2069:
     test_step:
         # Step 1: Open the post landing page as guest (no login required)
         open_post: "{BASE_URL}/autotestshop/post/auto-test-post-setting-t1742"
-        sleep_step: 4000
+        sleep_step: 8000
 
         # Step 2: Verify first announcement is displayed initially
         wait_announcement_1_visible: { text: "auto test01 Announcement", timeout: 8000 }
@@ -1824,8 +1862,8 @@ testT5033_5034_VerifyPartner:
         sleep_step: 3000
         R_click_event_1: { role: "cell", name: "verify-post-shipping_fee", optional: false }
         sleep_step: 2000
-        R_click_tickets_tab_1: { role: 'tab', name: 'Tickets', exact: true }
-        sleep_after_tickets_tab: 1500
+        # R_click_tickets_tab_1: { role: 'tab', name: 'Tickets', exact: true }
+        # sleep_after_tickets_tab: 1500
         # Step 1: Duplicate 2 tickets via each ticket card's "Tools" -> "Duplicate" (IN-PLACE)
         # (verified 2026-08-10 on release): the ticket card has a "Tools" button whose menu
         # contains an in-place "Duplicate" menuitem. It opens a pre-filled
@@ -1839,6 +1877,7 @@ testT5033_5034_VerifyPartner:
         sleep_step: 1000
         R_click_duplicate_submit_1: { role: "button", name: "Duplicate" }
         sleep_step: 3000
+        smart_click_optional_duplicate: { role: 'button', name: 'Duplicate', timeout: 3000 }
         # duplicate SPA-redirect is unreliable in automation; force-navigate back to the event
         # (suffix _2 avoids YAML duplicate-key collapse: test_step is a dict, so a repeated bare
         #  "open"/"R_click_event" key would be folded to its LAST occurrence and silently skipped)
@@ -1911,10 +1950,13 @@ testT5033_5034_VerifyPartner:
         check_CTACustomized: { locator: "input[name$='products.1.isCtaCustomized']" }
         sleep_step: 500
         # Set its Buy now CTA option -> "View options"
-        # MUI <Select> 的 role="combobox" 挂在隐藏 <input>（textContent 为空），
-        # 永远不匹配 :has-text('Buy now')；真正显示 "Buy now" 的是
-        # <div role="button" aria-haspopup="listbox">。
-        click_container_button_buynow_tgp: { container: "General Admission", button: "[aria-haspopup='listbox']:has-text('Buy now')", button_index: 0 }
+        # 按钮选择器 [aria-haspopup='listbox']:has-text('Buy now') 正确（整页唯 1 个）。
+        # 容器不能用 container_text="General Admission"：MUI 把 Advanced settings
+        # (CTA checkbox + Buy now) 渲染在产品卡 data-testid="content" 之外，
+        # page.locator("div", has_text="General Admission").last 取到的是产品名字
+        # wrapper，不含 Buy now → 超时。实测：整页只有 1 个 Buy now 且只在 dialog
+        # 内，故用 container_locator 直接锁定 dialog（不动 framework）。
+        click_container_button_buynow_tgp: { container_locator: "//div[@role='dialog']", button: "[aria-haspopup='listbox']:has-text('Buy now')", button_index: 0 }
         sleep_step: 500
         R_click_option_view_options: { role: "option", name: "View options" }
         sleep_step: 500
@@ -2045,7 +2087,10 @@ testT4955_Guest_VerifyAccessCode:
 
         # Step 3: Click General Admission product name to open detail drawer
         R_click_product_name_first: { locator: "text=General Admission" }
-        sleep_step: 3000
+        sleep_step: 1500
+
+        swipe_2: { x: 0, y: 500 }
+        sleep_step: 2500
 
         # Step 3.5: Select a variant (5/7/9 people) - required before Buy now becomes enabled
         # (variant "9 people" is the default per T2705, so it's always available)
@@ -2073,10 +2118,11 @@ testT4955_Guest_VerifyAccessCode:
         sleep_step: 3000
 
         # Step 9: Fill Contact info
-        fill_first_name: { locator: 'input[name="contact.firstName"]', value: 'Test' }
+        fill_first_name: { locator: 'input[name="contact.firstName"]', value: "Test" }
+        fill_last_name: { locator: 'input[name="contact.lastName"]', value: "User" }
         sleep_step: 500
-        fill_last_name: { locator: 'input[name="contact.lastName"]', value: 'User' }
-        sleep_step: 500
+
+        #fill_zipcode: { locator: 'input[name="address.zipcode"]', value: "40012" }
         fill_phone: { role: "textbox", name: "Phone number", value: '+1 (650) 900-6646' }
         sleep_step: 500
         fill_email: { locator: 'input[name="contact.email"]', value: 'xuan.ext+123@1m.app' }
@@ -2248,7 +2294,7 @@ testT3767:
     test_step:
         # Step 1: Open the post as guest
         open: "{BASE_URL}/autotestshop/post/verify-auto-coupon-apply"
-        sleep_after_open: 8000
+        sleep_after_open: 5000
 
         # Step 2: Scroll to find the product
         page_scroll: { y: 600, delay: 2000, steps: 5 }
@@ -2256,7 +2302,9 @@ testT3767:
 
         # Step 3: Click Buy Ticket
         R_click_buy_ticket: { role: "button", name: "Buy Ticket" }
-        sleep_step: 3000
+        sleep_step: 1500
+
+        smart_click_optional_buy_now: { role: 'button', name: 'Buy now', timeout: 3000 }
 
 
         # Step 4.1: Verify coupon "verify auto coupon apply" is displayed
@@ -2278,7 +2326,7 @@ testT3767:
         sleep_step: 500
 
         # Step 7: Place order
-        R_click_place_order: { role: "button", name: "RSVP" }
+        R_click_place_order: { role: "button", name: "Place order" }
         wait_for_url: { url: "*order*", timeout: 15000 }
         sleep_step: 2000
 
@@ -2320,7 +2368,7 @@ testT3767:
         sleep_step: 1500
 
         # Step 1: Click Edit icon to open coupon edit mode
-        click_edit_coupon: { locator: '[data-testid="enhance-button"]', index: 2 }
+        click_edit_coupon: { locator: '[data-testid="enhance-button"]', index: 1 }
         sleep_step: 1000
 
         # Step 2: Click Delete icon to delete the coupon
@@ -2366,6 +2414,12 @@ testT2281:
         smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
         sleep_step: 1000
 
+        click_add_product_cta: { test_id: 'enhance-button-cta' }
+        click_product_img: { test_id: 'SquareLineIcon', index: 0 }
+        sleep_after_click_product: 1000
+        click_add_product_btn: { role: 'button', name: 'product(s)' }
+        sleep_after_add_product: 1500
+
         # Step 2: Click Content tab and fill title
         R_click_content_tab: { role: 'tab', name: 'Content' }
         sleep_step: 1000
@@ -2407,7 +2461,7 @@ testT2281:
 
         # Step 10: In the duplicate, click Content tab and change title
         R_click_content_tab_2: { role: 'tab', name: 'Content' }
-        sleep_step: 21000
+        sleep_step: 2000
         #R_click_title_input_2: { role: 'tab', name: 'Content', timeout: 5000, optional: true }
         fill_title_duplicate: { locator: 'input[name="title"]', value: 'test case 2281 post duplicate' }
         sleep_step: 500
@@ -2417,23 +2471,23 @@ testT2281:
         sleep_step: 2000
 
 
-        uncheck_allow_expire: { locator: 'input[name="allowExpire"]', checked: false }
-        sleep_step: 5000
+        uncheck_allow_expire_1: { locator: 'input[name="allowExpire"]', checked: false }
+        sleep_step: 1000
 
         # Step 12: Click confirm button
         R_click_confirm_2: { locator: '[data-testid="confirm-button"]' }
-        sleep_step: 1000
-
-        # Step 13: Click Publish (publish the duplicate)
-        R_click_publish_2: { role: 'button', name: 'Publish' }
         sleep_step: 1000
 
         click_add_cover_media: { role: 'button', name: 'Add cover media' }
         click_products_media: { text: 'Products', exact: true }
         click_media_img: { role: 'img', name: 'Image of Product', index: 0 }
         click_done_btn_commerce: { role: 'button', name: 'Done' }
-        click_publish_btn: { role: 'button', name: 'Publish', index: 1 }
-        click_publish_btn_2: { role: 'button', name: 'Publish' }
+        uncheck_allow_expire_2: { locator: 'input[name="allowExpire"]', checked: false }
+        sleep_step: 1000
+
+        # Step 13: Click Publish (publish the duplicate)
+        R_click_publish_2: { role: 'button', name: 'Publish' }
+        sleep_step: 1000
 
         # Step 14: Click Save (success dialog)
         R_click_got_it_2: { role: 'button', name: 'Apply', timeout: 3000, optional: true }
@@ -2664,7 +2718,7 @@ testT1928:
     test_step:
         # Create product logic first
         open_dashboard: { url: "{BASE_URL}/sell/product/create" }
-        sleep_step_p1: 3500
+        sleep_step_p1: 2000
         
         R_click_content_tab: { locator: "[data-testid='content']", index: 0 }
         sleep_step_p2: 3000
@@ -2714,10 +2768,20 @@ testT1928:
         sleep_step_p17: 1000
         
         R_click_confirm_product: { test_id: 'confirm-button' }
-        sleep_step_p18: 8000
+        sleep_step_p18: 5000
+
+        R_click_settings: { role: 'button', name: 'Settings' }
+        sleep_step: 1000
+        R_click_allowed: { text: 'Not allowed' }
+        check_set_customize_price: { locator: "xpath=//span[normalize-space(text())='Allow custom retail prices']/preceding-sibling::span//input[@type='checkbox']" }
+        sleep_step: 1000
+        R_click_setting_save: { role: 'button', name: 'Save' }
+        R_click_back_icon: { test_id: 'komi-header-icon-btn' }
+        sleep_step: 3000
 
         # Then proceed with post creation
-        open: { url: "{BASE_URL}/post/create?c=POST_PAGE", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}_partner_coseller.json" }
+        open: { url: "{BASE_URL}/post/create?c=POST_PAGE" }
+        #open: { url: "{BASE_URL}/post/create?c=POST_PAGE", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}_partner_coseller.json" }
         sleep_step: 3000
         # Discard unsaved-draft recovery dialog if present (editor shows it on open)
         smart_click_optional_discard: { role: 'button', name: 'Discard', timeout: 3000 }
@@ -2729,17 +2793,22 @@ testT1928:
         R_click_enhance_cta: { test_id: "enhance-button-cta" }
         sleep_step: 1000
 
-        R_click_shared_tab: { role: 'tab', name: 'Shared with me' }
-        sleep_step: 1000
+        # R_click_shared_tab: { role: 'tab', name: 'Shared with me' }
+        # sleep_step: 1000
 
-        R_click_test_1928_product: { locator: "text=test 1928 product", index: 0 }
-        sleep_step: 1000
+        fill_product_search_4: { locator: 'input[placeholder="Search product"]', value: 'test 1928 product' }
+        sleep_step: 500
+        press_search_4: { key: "Enter" }
+        sleep_step: 1500
+
+        # click the test_general_products card (first/only visible card after search)
+        click_product_card_5: { test_id: 'SquareLineIcon', index: 0 }
 
         R_click_add_1_product: { locator: "button:has-text('product(s)')", index: 0 }
         sleep_step: 1000
 
-        smart_click_optional_close_btn_1: { role: 'button', name: 'Close', timeout: 3000 }
-        sleep_step: 1000
+        # smart_click_optional_close_btn_1: { role: 'button', name: 'Close', timeout: 3000 }
+        # sleep_step: 1000
 
         R_click_customize_products_btn: { role: 'button', name: 'Customize' }
         sleep_step: 2000
@@ -2748,6 +2817,7 @@ testT1928:
         sleep_step: 2000
 
         check_products_0_setCustomizePrice: { locator: 'input[name="products.0.setCustomizePrice"]', checked: true }
+        #verify_text_hidden: { text: "Customize prices in this post", timeout: 5000 }
         sleep_step: 1000
 
         R_click_save_btn: { role: 'button', name: 'Save', index: 0 }
@@ -2762,17 +2832,27 @@ testT1928:
         smart_click_optional_confirm_2: { test_id: 'confirm-button', timeout: 3000 }
         sleep_step: 1500
 
-        R_click_publish: { role: 'button', name: 'Publish' }
+        click_add_cover_media: { role: 'button', name: 'Add cover media' }
+        click_products_media: { text: 'Products', exact: true }
+        click_media_img: { role: 'img', name: 'Image of Product', index: 0 }
+        click_done_btn_commerce: { role: 'button', name: 'Done' }
+        sleep_step: 1000
+
+        # Step 13: Click Publish (publish the duplicate)
+        R_click_publish_2: { test_id: 'confirm-button', timeout: 3000 }
+        sleep_step: 1000
+
+        R_click_publish_3: { role: 'button', name: 'Publish' }
         sleep_step: 3000
 
-        smart_click_optional_got_it: { role: 'button', name: 'Save', timeout: 3000 }
+        smart_click_optional_got_it: { role: 'button', name: 'Apply', timeout: 3000 }
         sleep_step: 5000
 
         # Navigate to Catalogs to update product price
-        R_click_storefront: { text: 'Storefront' }
+        R_click_storefront: { role: 'button', name: 'Storefront' }
         sleep_step: 2000
         
-        R_click_catalogs: { text: 'Catalogs' }
+        R_click_catalogs: { text: 'Catalogs', timeout: 3000 }
         sleep_step: 3000
 
         R_click_more_action: { locator: '//tr[.//text()[contains(., "test 1928 product")]]//button[@aria-label="More action"]' }
@@ -2882,7 +2962,7 @@ testT3811:
         sleep_step: 3000
 
         # Step 17: Click the post card to enter details
-        R_click_post_card: { test_id: 'mui-card-action-area', index: 0 }
+        R_click_post_card: { role: 'button', name: 'View post', index: 0 }
         sleep_step: 3000
 
         # Step 18: Click Selling tab

@@ -1177,37 +1177,6 @@ def click_container_button(page: Page, v: dict):
     # Find and click button, auto-detect XPath
     prefix = "xpath=" if button_selector.startswith("/") else ""
     button_loc = container.locator(f"{prefix}{button_selector}")
-    # The innermost container (selected by .last) may not contain the target
-    # button. Two known causes:
-    #   (a) the container text lives in a name/header wrapper while the button
-    #       sits in a SIBLING section; or
-    #   (b) the container text is a substring that matches dozens of ancestor divs
-    #       on a page whose visible text is one concatenated blob (e.g. 45+ divs
-    #       all "contain" the product name) — there .last resolves to the wrong
-    #       innermost element and the button is not found inside it.
-    # Fix: narrow to the divs that carry BOTH the container text AND the target
-    # button. `.filter(has=...)` collapses the 45+ ambiguous text matches down to
-    # the actual product card (and its ancestors); `.last` then picks the deepest
-    # such div = the card itself. Robust to nesting depth, and the container text
-    # (e.g. "General Admission") naturally excludes the OTHER product's card.
-    # Only triggers when .last yields zero button matches, and only when no
-    # explicit container_locator is given (those cases keep their exact original
-    # scope — zero regression).
-    if container_text and not container_locator and button_loc.count() == 0:
-        page_button = page.locator(f"{prefix}{button_selector}")
-        logger.warning(
-            f"click_container_button: innermost container had 0 matches for '{button_selector}'; "
-            f"narrowing to divs that contain BOTH text '{container_text}' and the button"
-        )
-        narrowed = page.locator("div", has_text=container_text).filter(has=page_button)
-        if narrowed.count() > 0:
-            container = narrowed.last
-        else:
-            # Button (or its text) not found anywhere — keep original .last so we
-            # fail with a clear button-timeout instead of a strict-mode crash.
-            container = page.locator("div", has_text=container_text).last
-        container.scroll_into_view_if_needed()
-        button_loc = container.locator(f"{prefix}{button_selector}")
     button_loc.nth(button_index).click(timeout=10000)
     logger.info(f"✓ Clicked button '{button_selector}' at index {button_index}")
 
