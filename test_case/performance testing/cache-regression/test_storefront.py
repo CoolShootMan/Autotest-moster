@@ -27,15 +27,17 @@ from dynamic_ids import (
     promoter_sub_path,
 )
 
-STOREFRONT_ENDPOINTS = [
-    {"path": STORE_PATH, "label": "shop-config"},
-    {"path": feature_flag_user_path(), "label": "feature-flag-user"},
-    {"path": feature_flag_public_path(), "label": "feature-flag-public"},
-    {"path": feature_setting_public_path(), "label": "feature-setting-public"},
-    {"path": FEATURE_SETTING_SIGNUP_PATH, "label": "feature-setting-signup"},
-    {"path": CART_PATH, "label": "cart-storefront"},
-    {"path": promoter_sub_path(), "label": "promoter-sub-storefront"},
-]
+def get_storefront_endpoints() -> list[dict]:
+    """构造 storefront 端点列表（延迟求值：user/curator id 在测试执行时才查询，避免 import 阶段发网络请求）。"""
+    return [
+        {"path": STORE_PATH, "label": "shop-config"},
+        {"path": feature_flag_user_path(), "label": "feature-flag-user"},
+        {"path": feature_flag_public_path(), "label": "feature-flag-public"},
+        {"path": feature_setting_public_path(), "label": "feature-setting-public"},
+        {"path": FEATURE_SETTING_SIGNUP_PATH, "label": "feature-setting-signup"},
+        {"path": CART_PATH, "label": "cart-storefront"},
+        {"path": promoter_sub_path(), "label": "promoter-sub-storefront"},
+    ]
 
 
 @pytest.mark.asyncio
@@ -86,9 +88,10 @@ class TestStorefrontCache:
     async def test_storefront_katana_apis_hit_cache(self, http_client):
         """预热 storefront 7 个 katana API，验证全部 DB=0（严格断言）。"""
         failures = []
+        endpoints = get_storefront_endpoints()
 
         # ---- 预热：全部 7 个端点 ----
-        for ep in STOREFRONT_ENDPOINTS:
+        for ep in endpoints:
             url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
@@ -97,7 +100,7 @@ class TestStorefrontCache:
             ep["warmup_db"] = get_db_queries(resp)
 
         # ---- 验证：全部 7 个端点 DB=0 ----
-        for ep in STOREFRONT_ENDPOINTS:
+        for ep in endpoints:
             url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
