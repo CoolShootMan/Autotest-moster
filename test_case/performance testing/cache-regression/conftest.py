@@ -467,6 +467,38 @@ def _write_get_db_audit_report() -> str:
         lines.append(f"| {idx} | `{url}` | {count} | {dist} | {status_mark} |")
     lines.append("")
 
+    # ---- 写接口（PUT/PATCH/POST）DB 读取明细 ----
+    # 写接口读 DB 是期望行为，不判违规；此处用于暴露 promotion/coupon 读取实际发生在
+    # 哪条接口——例如 PUT /cart 加购时 promotion service 自动读 coupon 计算折扣
+    # （totalCouponDiscount 即其产物），该 DB 查询不在独立 GET 接口上。
+    write_entries = [
+        e for e in REQUEST_LOG
+        if e["method"] != "GET" and not _is_integrity_probe(e["url"])
+    ]
+    write_grouped = OrderedDict()
+    for e in write_entries:
+        key = f"{e['method']} {e['url']}"
+        write_grouped.setdefault(key, []).append(e)
+
+    lines.append("## 写接口（PUT/PATCH/POST）DB 读取明细")
+    lines.append("")
+    lines.append("- 写接口读 DB 是期望行为，不判违规；用于暴露 promotion/coupon 配置读取发生在哪条接口。")
+    lines.append("")
+    if not write_grouped:
+        lines.append("无写接口请求。")
+        lines.append("")
+    else:
+        lines.append("| # | Method URL | 请求次数 | DB 分布 |")
+        lines.append("|---|-----------|---------|---------|")
+        for idx, (key, entries) in enumerate(write_grouped.items(), 1):
+            db_seq = [e["db"] for e in entries]
+            dist_counter = collections.Counter(db_seq)
+            dist = " | ".join(
+                f"{q}DB×{c}次" for q, c in sorted(dist_counter.items())
+            )
+            lines.append(f"| {idx} | `{key}` | {len(entries)} | {dist} |")
+        lines.append("")
+
     lines.append("## 判定口径")
     lines.append("")
     lines.append("- 首次请求（冷启动/预热）DB>0 视为正常穿透，仅记录不判定违规；")
