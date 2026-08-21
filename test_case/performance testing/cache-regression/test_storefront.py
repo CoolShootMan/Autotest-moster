@@ -9,24 +9,32 @@ import pytest
 from conftest import (
     assert_zero_db_queries,
     get_db_queries,
-    KATANA_API,
+    BASE_URL,
     KATANA_AUTH_HEADERS,
 )
-
-
-USER_ID = "009eef19-723d-402f-8f14-c9ec3db08ba5"
-PROMOTER_ID = "84a0de44-47e4-4a38-883e-d99ed194d7d7"
+# 统一参数中心（API_Parameter_Release.csv / API_Parameter_Prod.csv）：静态路径模板渲染；动态 id 路径由 dynamic_ids 运行时拼接
+from api_params import (
+    CART_PATH,
+    FEATURE_SETTING_SIGNUP_PATH,
+    PEAR_STORE_PATH,
+    STORE_PATH,
+)
+# 动态业务 id 路径（运行时从接口查询 user/curator id 后拼接，不写死）
+from dynamic_ids import (
+    feature_flag_public_path,
+    feature_flag_user_path,
+    feature_setting_public_path,
+    promoter_sub_path,
+)
 
 STOREFRONT_ENDPOINTS = [
-    {"path": "/store-front/shop/resident?public=false", "label": "shop-config"},
-    {"path": f"/feature-flag/user/{USER_ID}", "label": "feature-flag-user"},
-    {"path": f"/feature-flag/user/{USER_ID}/public", "label": "feature-flag-public"},
-    {"path": f"/feature-setting/consumer-public?scene=SCENE_GUEST_SHOP&promoterId={PROMOTER_ID}",
-     "label": "feature-setting-public"},
-    {"path": "/feature-setting/consumer-signup?lead=default", "label": "feature-setting-signup"},
-    {"path": "/cart", "label": "cart-storefront"},
-    {"path": f"/promoter-subscription/setting/{USER_ID}?settingType=SUBSCRIPTION",
-     "label": "promoter-sub-storefront"},
+    {"path": STORE_PATH, "label": "shop-config"},
+    {"path": feature_flag_user_path(), "label": "feature-flag-user"},
+    {"path": feature_flag_public_path(), "label": "feature-flag-public"},
+    {"path": feature_setting_public_path(), "label": "feature-setting-public"},
+    {"path": FEATURE_SETTING_SIGNUP_PATH, "label": "feature-setting-signup"},
+    {"path": CART_PATH, "label": "cart-storefront"},
+    {"path": promoter_sub_path(), "label": "promoter-sub-storefront"},
 ]
 
 
@@ -45,8 +53,8 @@ async def test_cold_start_header_sanity(http_client):
     """
     from conftest import get_db_queries, assert_zero_db_queries
 
-    STOREFRONT_PATH = "/feature-setting/consumer-signup?lead=default"
-    STOREFRONT_API = f"{KATANA_API}{STOREFRONT_PATH}"
+    STOREFRONT_PATH = FEATURE_SETTING_SIGNUP_PATH
+    STOREFRONT_API = f"{BASE_URL}{STOREFRONT_PATH}"
 
     resp = await http_client.get(STOREFRONT_API, headers=KATANA_AUTH_HEADERS)
     assert resp.status_code == 200
@@ -81,7 +89,7 @@ class TestStorefrontCache:
 
         # ---- 预热：全部 7 个端点 ----
         for ep in STOREFRONT_ENDPOINTS:
-            url = f"{KATANA_API}{ep['path']}"
+            url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
                 f"Warm-up failed [{ep['label']}]: status={resp.status_code}"
@@ -90,7 +98,7 @@ class TestStorefrontCache:
 
         # ---- 验证：全部 7 个端点 DB=0 ----
         for ep in STOREFRONT_ENDPOINTS:
-            url = f"{KATANA_API}{ep['path']}"
+            url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
                 f"Verify failed [{ep['label']}]: status={resp.status_code}"
@@ -114,10 +122,10 @@ class TestStorefrontCache:
     @pytest.mark.asyncio
     async def test_storefront_ssr_hit_cache(self, pear_context):
         """SSR 页面缓存回归 — 通过浏览器 console.log 读取 x-db-query-count"""
-        from conftest import navigate_pear_page, PEAR_BASE_URL
+        from conftest import navigate_pear_page, PEAR_URL
 
-        path = "/resident"
-        full_url = f"{PEAR_BASE_URL}{path}"
+        path = PEAR_STORE_PATH
+        full_url = f"{PEAR_URL}{path}"
 
         # 预热：首次加载，触发缓存填充
         count1, status1 = await navigate_pear_page(pear_context, path)
