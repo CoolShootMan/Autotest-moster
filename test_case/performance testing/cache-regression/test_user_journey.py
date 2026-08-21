@@ -15,7 +15,7 @@ from conftest import (
     BASE_URL,
     KATANA_AUTH_HEADERS,
 )
-from test_storefront import STOREFRONT_ENDPOINTS
+from test_storefront import get_storefront_endpoints
 # 统一参数中心：静态路径模板渲染；动态 id 路径由 dynamic_ids 运行时拼接
 from api_params import (
     CART_PATH,
@@ -27,19 +27,21 @@ from dynamic_ids import product_event_path, promoter_sub_path
 
 
 # ---- 端点定义 ----
-# Pear SSR 页面
+# Pear SSR 页面（纯静态，无网络请求）
 PEAR_ENDPOINTS = [
     {"path": PEAR_STORE_PATH, "label": "storefront"},
     {"path": PEAR_POST_PATH, "label": "post-detail"},
 ]
 
-# Post Detail 阶段 — 4 个 katana API
-POST_DETAIL_ENDPOINTS = [
-    {"path": POST_DETAIL_PATH, "label": "post-detail-main"},
-    {"path": product_event_path(), "label": "product-event"},
-    {"path": CART_PATH, "label": "cart-post-detail"},
-    {"path": promoter_sub_path(), "label": "promoter-sub-post-detail"},
-]
+
+def get_post_detail_endpoints() -> list[dict]:
+    """构造 Post Detail 端点列表（延迟求值：event/user id 在测试执行时才查询，避免 import 阶段发网络请求）。"""
+    return [
+        {"path": POST_DETAIL_PATH, "label": "post-detail-main"},
+        {"path": product_event_path(), "label": "product-event"},
+        {"path": CART_PATH, "label": "cart-post-detail"},
+        {"path": promoter_sub_path(), "label": "promoter-sub-post-detail"},
+    ]
 
 
 # ---- 测试类 ----
@@ -62,6 +64,8 @@ class TestUserJourneyCache:
         from conftest import navigate_pear_page
 
         failures = []
+        storefront_endpoints = get_storefront_endpoints()
+        post_detail_endpoints = get_post_detail_endpoints()
 
         # ==================== 预热阶段 ====================
         # Step 1: 预热 Pear SSR 页面（Playwright）
@@ -72,7 +76,7 @@ class TestUserJourneyCache:
             )
 
         # Step 2: 预热 Storefront katana API
-        for ep in STOREFRONT_ENDPOINTS:
+        for ep in storefront_endpoints:
             url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
@@ -81,7 +85,7 @@ class TestUserJourneyCache:
             ep["warmup_db"] = get_db_queries(resp)
 
         # Step 3: 预热 Post Detail katana API
-        for ep in POST_DETAIL_ENDPOINTS:
+        for ep in post_detail_endpoints:
             url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
@@ -91,7 +95,7 @@ class TestUserJourneyCache:
 
         # ==================== 验证阶段 ====================
         # Step 4: 先验证 Post Detail katana（模拟用户点击进入）
-        for ep in POST_DETAIL_ENDPOINTS:
+        for ep in post_detail_endpoints:
             url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
@@ -106,7 +110,7 @@ class TestUserJourneyCache:
                 failures.append(f"[{ep['label']}] {exc}")
 
         # Step 5: 再验证 Storefront katana（确认缓存未被污染）
-        for ep in STOREFRONT_ENDPOINTS:
+        for ep in storefront_endpoints:
             url = f"{BASE_URL}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (

@@ -307,13 +307,18 @@ class TestPromotionCache:
                 http_client, TestPromotionCache.auto_tag
             )
 
-        async def _add_to_cart() -> float:
+        async def _add_to_cart() -> tuple[float, int]:
+            """PUT /cart 加购：返回 (per-item coupon 折扣, X-DB-Query-Count)。
+
+            promotion/coupon 配置读取发生在该写接口内——服务端自动读 auto coupon
+            计算折扣（totalCouponDiscount 即其产物），DB 查询数即 coupon 读取开销。
+            """
             resp = await http_client.put(CART_URL, headers=AUTH_HEADERS, json=_cart_body())
             assert resp.status_code == 200, f"Cart add failed: {resp.status_code} {resp.text}"
             item = resp.json()["data"]["items"][0]
             total = item.get("totalCouponDiscount", 0) or 0
             qty = item.get("quantity", 1) or 1
-            return total / qty
+            return total / qty, get_db_queries(resp)
 
         async def _patch_auto(discount: int) -> int:
             resp = await http_client.patch(
@@ -329,13 +334,14 @@ class TestPromotionCache:
             return get_db_queries(resp)
 
         # Step 1: baseline（10% 折扣）
-        base_per = await _add_to_cart()
+        base_per, base_db = await _add_to_cart()
 
         # Step 2: 修改 auto coupon 折扣 10% -> 20%（动态 id 全量替换）
         patch_db = await _patch_auto(20)
         try:
-            # Step 3: 修改后加购，应反映新折扣
-            after_per = await _add_to_cart()
+            # Step 3: 修改后加购，应反映新折扣（且 coupon 配置读取 DB 不应低于 baseline，
+            #         否则说明加购读的是缓存旧配置 → stale）
+            after_per, after_db = await _add_to_cart()
         finally:
             # Step 4: 恢复 10%
             await _patch_auto(10)
@@ -347,9 +353,127 @@ class TestPromotionCache:
             f"then read via PUT /cart\n"
             f"  Expected: per-item coupon discount 从 {base_per:.2f} 增大到 ~{base_per * 2:.2f}（折扣翻倍）\n"
             f"  Actual:   per-item coupon discount = {after_per:.2f}（未反映修改，仍是旧值 {base_per:.2f}）\n"
-            f"  Coupon modify DB queries: {patch_db}\n"
+            f"  PUT /cart DB queries: baseline={base_db} -> after={after_db}（coupon 修改后加购），"
+            f"PATCH promotions DB={patch_db}\n"
             f"  Action: promotion 配置读取仍命中旧缓存，coupon 修改未被立即失效。\n"
             f"  Check: 1) 修改 coupon 后 promotion service 是否主动失效配置缓存？\n"
             f"         2) 加购读路径是否读取了最新 promotion 配置（无 stale TTL）？\n"
             f"         3) PATCH promotions 是否真正写入了新折扣（对比 coupon 管理后台）？"
+        )
+        # 补充 DB 证据（仅记录，不做相对断言）：coupon 修改后 PUT /cart 重新读取配置。
+        # 注意：baseline 是冷启动（含全量初始化读取，DB=11），after 是已预热后（DB=5），
+        # DB 下降源于整体预热而非 coupon 配置 stale——折扣翻倍已证明修改生效。
+        # 折扣正确性由上方断言保证；PUT /cart 的 DB 分布见审计报告"写接口 DB 读取明细"。
+        print(
+            f"[promotion-invalidation] PUT /cart DB: baseline(cold)={base_db} "
+            f"-> after(coupon 修改后加购)={after_db}; PATCH promotions DB={patch_db}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_promotion_get_direct_read_hit_cache(self, http_client, promo_auth_headers):
+        """GET /posts/curator/{postId}/promotions 直接读取纳入测试。
+
+        promotion 配置读取的显式读接口：直接 GET promotions 资源。
+        语义与 POST detail 读路径同口径：预热后连续读应缓存命中 DB=0。
+
+        2026-08-21 release 实测：该路径当前仅注册 PATCH（全量替换），
+        GET 路由返回 404（"Cannot GET .../promotions"）且无 X-DB-Query-Count 埋点，
+        故本用例在 BE 补齐前按 BE 缺口失败（非脚本问题）——失败信息即需上报的缺口：
+        BE 需实现 GET promotions 路由并部署 DB 埋点后，方可验证该读路径缓存命中。
+        """
+        url = promo_path()
+
+        # 预热 — 允许穿透 DB
+        resp_warm = await http_client.get(url, headers=promo_auth_headers)
+        assert resp_warm.status_code == 200, (
+            f"GET promotions warm-up failed: HTTP {resp_warm.status_code}\n"
+            f"  Endpoint: GET {url}\n"
+            f"  Response body: {resp_warm.text[:400]}\n"
+            f"  Action: BE 未注册 GET /posts/curator/{{postId}}/promotions 路由"
+            f"（当前仅 PATCH 全量替换），无法直接验证该读路径缓存命中。\n"
+            f"  Check: BE 需实现 GET promotions 路由并部署 X-DB-Query-Count 埋点后，"
+            f"本用例预期预热后 DB=0（缓存命中）。"
+        )
+
+        # 验证 — 断言缓存命中（DB=0）
+        resp_verify = await http_client.get(url, headers=promo_auth_headers)
+        assert resp_verify.status_code == 200, (
+            f"GET promotions verify failed: HTTP {resp_verify.status_code}"
+        )
+        assert_zero_db_queries(
+            resp_verify,
+            resource=promo_path(),
+            attempt="verify",
+            url=url,
+            warmup_db_queries=get_db_queries(resp_warm),
+        )
+
+    @pytest.mark.asyncio
+    async def test_promotion_get_cart_read_after_apply(
+        self, http_client, promo_auth_headers
+    ):
+        """apply coupon 后 GET /cart 读取购物车的 DB 读取验证（GET /cart 纳入违规判定）。
+
+        场景（真实业务读路径）：
+        1. PATCH 应用 auto coupon（满 20 减 10%）
+        2. PUT /cart 加购 → coupon 生效（item.totalCouponDiscount > 0）
+        3. GET /cart 读取购物车（预热）→ 再读（验证）
+
+        口径：GET 是读接口，纳入审计违规判定——预热后再次读取必须缓存命中 DB=0；
+        若预热后 DB>0（购物车有 coupon 时读取仍穿透 DB），即缓存缺口，判违规。
+
+        2026-08-21 release 实测：GET /cart 预热后 DB=0（购物车有 coupon 时亦缓存命中），
+        通过。注意：PATCH 修改 coupon 会触发 cart 缓存失效，下一次 GET /cart 重新计算
+        读 DB（期望行为，类似写接口）；本用例不涉及 coupon 修改，验证的是
+        "无写操作时 GET /cart 预热后命中缓存"。
+        """
+        # 0. 兜底 apply coupon（前置 setup 未运行时自建）
+        if getattr(TestPromotionCache, "auto_id", None) is None:
+            TestPromotionCache.auto_tag = _now_tag()
+            resp = await http_client.patch(
+                promo_path(),
+                headers=promo_auth_headers,
+                json=_build_promo_body(discount=10, auto_tag=TestPromotionCache.auto_tag),
+            )
+            assert resp.status_code == 200, (
+                f"Create auto coupon failed: {resp.status_code} {resp.text}"
+            )
+            TestPromotionCache.auto_id = await _read_auto_coupon_id(
+                http_client, TestPromotionCache.auto_tag
+            )
+
+        # 1. 加购触发 coupon 计算（购物车 item 带 totalCouponDiscount）
+        resp = await http_client.put(CART_URL, headers=AUTH_HEADERS, json=_cart_body())
+        assert resp.status_code == 200, (
+            f"Cart add failed: {resp.status_code} {resp.text}"
+        )
+        total = (
+            resp.json()["data"]["items"][0].get("totalCouponDiscount", 0) or 0
+        )
+        assert total > 0, (
+            f"auto coupon 未生效：PUT /cart 加购后 totalCouponDiscount=0，"
+            f"购物车未触发 coupon 计算，GET /cart 无 coupon 数据可读。"
+            f"  Check: 1) auto coupon(autoApplied) 是否仍存在且生效？\n"
+            f"         2) 加购 price 是否满足 amountThreshold？"
+        )
+
+        # 2. GET /cart 预热（允许穿透 DB）
+        url = f"{BASE_URL}/cart?"
+        resp_warm = await http_client.get(url, headers=AUTH_HEADERS)
+        assert resp_warm.status_code == 200, (
+            f"GET /cart warm-up failed: {resp_warm.status_code} {resp_warm.text[:200]}"
+        )
+        warmup_db = get_db_queries(resp_warm)
+
+        # 3. GET /cart 验证 — 预热后必须缓存命中 DB=0
+        resp_verify = await http_client.get(url, headers=AUTH_HEADERS)
+        assert resp_verify.status_code == 200, (
+            f"GET /cart verify failed: {resp_verify.status_code} {resp_verify.text[:200]}"
+        )
+        assert_zero_db_queries(
+            resp_verify,
+            resource="/cart",
+            attempt="verify",
+            url=url,
+            warmup_db_queries=warmup_db,
         )

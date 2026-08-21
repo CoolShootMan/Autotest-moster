@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install httpx pytest pytest-asyncio playwright
+          pip install httpx pytest pytest-asyncio playwright python-dotenv
           # SSR 用例依赖浏览器 console 抓取，需安装 chromium
           playwright install --with-deps chromium
 
@@ -36,7 +36,7 @@ jobs:
         working-directory: test_case/performance testing/cache-regression
         shell: bash
         run: |
-          LATEST=$(ls -t output/get_api_db_audit_*.md 2>/dev/null | head -1)
+          LATEST=$(find output -name 'get_api_db_audit_*.md' -type f 2>/dev/null | head -1)
           if [ -z "$LATEST" ]; then
             echo "::warning::No GET API DB audit report found in output/"
             exit 0
