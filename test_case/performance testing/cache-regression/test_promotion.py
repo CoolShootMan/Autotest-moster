@@ -368,3 +368,42 @@ class TestPromotionCache:
             f"[promotion-invalidation] PUT /cart DB: baseline(cold)={base_db} "
             f"-> after(coupon 修改后加购)={after_db}; PATCH promotions DB={patch_db}"
         )
+
+    @pytest.mark.asyncio
+    async def test_promotion_get_direct_read_hit_cache(self, http_client, promo_auth_headers):
+        """GET /posts/curator/{postId}/promotions 直接读取纳入测试。
+
+        promotion 配置读取的显式读接口：直接 GET promotions 资源。
+        语义与 POST detail 读路径同口径：预热后连续读应缓存命中 DB=0。
+
+        2026-08-21 release 实测：该路径当前仅注册 PATCH（全量替换），
+        GET 路由返回 404（"Cannot GET .../promotions"）且无 X-DB-Query-Count 埋点，
+        故本用例在 BE 补齐前按 BE 缺口失败（非脚本问题）——失败信息即需上报的缺口：
+        BE 需实现 GET promotions 路由并部署 DB 埋点后，方可验证该读路径缓存命中。
+        """
+        url = promo_path()
+
+        # 预热 — 允许穿透 DB
+        resp_warm = await http_client.get(url, headers=promo_auth_headers)
+        assert resp_warm.status_code == 200, (
+            f"GET promotions warm-up failed: HTTP {resp_warm.status_code}\n"
+            f"  Endpoint: GET {url}\n"
+            f"  Response body: {resp_warm.text[:400]}\n"
+            f"  Action: BE 未注册 GET /posts/curator/{{postId}}/promotions 路由"
+            f"（当前仅 PATCH 全量替换），无法直接验证该读路径缓存命中。\n"
+            f"  Check: BE 需实现 GET promotions 路由并部署 X-DB-Query-Count 埋点后，"
+            f"本用例预期预热后 DB=0（缓存命中）。"
+        )
+
+        # 验证 — 断言缓存命中（DB=0）
+        resp_verify = await http_client.get(url, headers=promo_auth_headers)
+        assert resp_verify.status_code == 200, (
+            f"GET promotions verify failed: HTTP {resp_verify.status_code}"
+        )
+        assert_zero_db_queries(
+            resp_verify,
+            resource=promo_path(),
+            attempt="verify",
+            url=url,
+            warmup_db_queries=get_db_queries(resp_warm),
+        )

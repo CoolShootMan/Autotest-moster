@@ -91,6 +91,15 @@ def _is_integrity_probe(url: str) -> bool:
     return "/feature-flag/" in url
 
 
+def _is_diagnostic_get(url: str) -> bool:
+    """cart 类 GET 归为诊断性：购物车加载会实时读 DB（含 promotion 配置计算），
+    读 DB 属期望业务行为，不适用「缓存命中 DB=0」口径，不判违规。
+
+    仅用于审计报告分类（诊断小节），不影响其他 GET 的缓存命中判定。
+    """
+    return "/cart" in url
+
+
 # ---- Fixtures ----
 @pytest.fixture(scope="function")
 async def http_client():
@@ -413,9 +422,17 @@ def _write_get_db_audit_report() -> str:
     lines.append(f"- 去重 GET 接口数：{len(grouped)}")
     lines.append("")
 
+    # cart 类 GET 归诊断性（读 DB 属期望行为，不判违规）
+    business_grouped = OrderedDict(
+        (u, e) for u, e in grouped.items() if not _is_diagnostic_get(u)
+    )
+    diag_grouped = OrderedDict(
+        (u, e) for u, e in grouped.items() if _is_diagnostic_get(u)
+    )
+
     violations = []
     details = []
-    for url, entries in grouped.items():
+    for url, entries in business_grouped.items():
         db_seq = [e["db"] for e in entries]
         status_seq = [e["status"] for e in entries]
         # 仅 2xx 响应计入 DB 判定（非 2xx 时 DB 计数不可信）
@@ -443,6 +460,8 @@ def _write_get_db_audit_report() -> str:
     lines.append(f"## 结果总览")
     lines.append("")
     lines.append(f"- **违规接口数（预热后仍读 DB）：{len(violations)}**")
+    if diag_grouped:
+        lines.append(f"- 诊断性 GET（cart 读 DB 属期望行为，不判违规）：{len(diag_grouped)}")
     lines.append("")
     if not violations:
         lines.append("### 全部 GET 均为 0 DB 读取（预热后缓存完全命中），无违规项。")
@@ -466,6 +485,26 @@ def _write_get_db_audit_report() -> str:
     for idx, (url, count, dist, status_mark) in enumerate(details, 1):
         lines.append(f"| {idx} | `{url}` | {count} | {dist} | {status_mark} |")
     lines.append("")
+
+    # ---- 诊断性 GET（cart）明细 ----
+    # GET /cart 加载购物车时服务端会实时读 DB（含 promotion 配置计算），
+    # 读 DB 属期望业务行为，不适用「缓存命中 DB=0」口径，不判违规。
+    if diag_grouped:
+        lines.append("## 诊断性 GET（cart 读 DB 属期望行为，不判违规）")
+        lines.append("")
+        lines.append("- GET /cart 加载购物车会实时读 DB（含 promotion 配置计算），读 DB 是期望业务行为，")
+        lines.append("  不适用「缓存命中 DB=0」口径，仅记录 DB 分布供诊断，不判违规。")
+        lines.append("")
+        lines.append("| # | GET URL | 请求次数 | DB 分布 |")
+        lines.append("|---|---------|---------|---------|")
+        for idx, (url, entries) in enumerate(diag_grouped.items(), 1):
+            db_seq = [e["db"] for e in entries]
+            dist_counter = collections.Counter(db_seq)
+            dist = " | ".join(
+                f"{q}DB×{c}次" for q, c in sorted(dist_counter.items())
+            )
+            lines.append(f"| {idx} | `{url}` | {len(entries)} | {dist} |")
+        lines.append("")
 
     # ---- 写接口（PUT/PATCH/POST）DB 读取明细 ----
     # 写接口读 DB 是期望行为，不判违规；此处用于暴露 promotion/coupon 读取实际发生在
@@ -503,6 +542,7 @@ def _write_get_db_audit_report() -> str:
     lines.append("")
     lines.append("- 首次请求（冷启动/预热）DB>0 视为正常穿透，仅记录不判定违规；")
     lines.append("- 同一 GET URL 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规并抛出；")
+    lines.append("- GET /cart 归诊断性：购物车加载实时读 DB（含 promotion 配置计算）属期望行为，不判违规；")
     lines.append("- 非 2xx 响应的 DB 计数不可信，不参与违规判定；")
     lines.append("- header_integrity_check 探测请求不经事件钩子，不进入本日志；")
     lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）。")
