@@ -1,13 +1,14 @@
 """
 KAT-11756 Task 3: Promotion Cache Validation.
 
-覆盖 No.3 scoped cases：
-1. GET 读接口连续读 100% 缓存命中、0 DB（post detail 读触发 promotion service）
+验证 promotion 服务的缓存行为，覆盖 No.3 scoped cases：
+1. GET 读接口连续读 100% 缓存命中、0 DB（post detail 读会触发 promotion service）
 2. GET 读接口并发读无缓存击穿
-3. coupon 被修改后，读路径（PUT /cart 触发 promotion 计算）立即反映新折扣，不 stale
+3. coupon 被修改后，读路径（PUT /cart 加购触发 promotion 计算）必须立即反映新折扣，不能 stale
 
-接口语义约定：GET 读接口期望缓存命中 DB=0；PATCH promotions 是写接口，
-读 DB 是期望行为，不做缓存命中断言。
+接口语义约定：
+- GET 读接口：期望缓存命中 DB=0（严格断言）
+- PATCH promotions：写接口（改 coupon），读 DB 是期望行为，不做缓存命中断言
 """
 import asyncio
 import collections
@@ -15,34 +16,47 @@ import time
 
 import pytest
 from conftest import (
+    PROMO_BASE_URL,
     assert_zero_db_queries,
     get_db_queries,
     AUTH_HEADERS,
+    KATANA_API,
     KATANA_AUTH_HEADERS,
 )
-from api_params import BASE_URL, POST_DETAIL_PATH
-# 动态业务 id（运行时从接口查询，不写死）：
-#   promo_path() = {BASE}/posts/curator/{CURATOR_POST_ID}/promotions
-#   curator_post_id() = POST_DETAIL 返回的 post id；product_variant_id() = 第一个关联商品 displayVariantId
-from dynamic_ids import curator_post_id, product_variant_id, promo_path
+
+
+PROMO_PATH = "/posts/curator/21ff913d-b9bc-4f97-9246-f7438e2106f9/promotions"
 
 # GET 读接口：post detail 读会调用 promotion service（coupon 计算），
 # 预热后连续读必须 100% 缓存命中（DB=0）
-READ_PATH = POST_DETAIL_PATH
+READ_PATH = "/posts/consumer/detail?vanityUrl=resident&urlAlias=11756"
 
-# 注：PATCH promotions 为全量替换语义；tear-down 已清空该 post 全部 coupons，
-# 测试从零自建 auto coupon，promotionId 全程动态（admin 匹配），绝不写死任何基线 id。
+PROMO_BODY = {
+    "announcements": [],
+    "promotions": [
+        {
+            "promotionId": "2523",
+            "amountThresholdDiscounts": [
+                {"amountThreshold": 100, "discountPercentage": 10}
+            ],
+            "applicableCode": "NMGsJeLy",
+            "codeAliases": [],
+            "title": "",
+            "description": "",
+            "autoApplied": False,
+            "oneTimeUsePerCustomer": False,
+            "isExtend": False,
+            "startTime": "2026-07-23T03:42:03.102Z",
+        }
+    ],
+    "hideCouponBox": False,
+}
+
 
 # ---- auto coupon 模板（动态 id）与加购读路径常量 ----
 
-# auto coupon 模板：不带 promotionId——PATCH 时服务端新建并分配递增新 id（与 web 行为一致）
-def _now_iso() -> str:
-    """当前 UTC 时间（ISO-8601，毫秒+Z），用于 auto coupon 的 startTime，避免写死过期时间。"""
-    from datetime import datetime, timezone
-
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
+# auto coupon 模板：不带 promotionId——PATCH 时服务端新建并分配递增新 id（与 web 行为一致），
+# 全程用动态 id，绝不写死（写死过期 id 如 2620 会触发 katana-promotion 事务超时 503）。
 AUTO_COUPON_TEMPLATE = {
     "amountThresholdDiscounts": [
         {"amountThreshold": 20, "discountPercentage": 10}
@@ -50,34 +64,25 @@ AUTO_COUPON_TEMPLATE = {
     "applicableCode": "",
     "codeAliases": [],
     "title": "",
-    "description": "automation test by linda",
+    "description": "automation test",
     "autoApplied": True,
     "oneTimeUsePerCustomer": False,
     "isExtend": False,
-    # startTime 不在模板：_build_promo_body 每次动态填当前 UTC 时间，避免写死过期时间
+    "startTime": "2026-08-19T02:07:59.397Z",
 }
 
 # 加购读路径：PUT /cart 触发 promotion 计算，totalCouponDiscount 反映生效折扣
-CART_URL = f"{BASE_URL}/cart"
-
-
-def _cart_body() -> dict:
-    """加购请求体：postId / promoterProductVariantId 全程动态，不再写死（避免环境 id 漂移）。
-
-    - postId                 → dynamic_ids.curator_post_id()（POST_DETAIL 返回的 post id）
-    - promoterProductVariantId → dynamic_ids.product_variant_id()
-                                （POST_DETAIL relatedProducts[0].displayVariantId）
-    """
-    return {
-        "items": [
-            {
-                "quantity": 1,
-                "promoterProductVariantId": product_variant_id(),
-                "price": 20,
-                "postId": curator_post_id(),
-            }
-        ]
-    }
+CART_URL = f"{KATANA_API}/cart"
+CART_BODY = {
+    "items": [
+        {
+            "quantity": 1,
+            "promoterProductVariantId": "28227f32-349c-4319-8e35-ff68a3deb2f3",
+            "price": 20,
+            "postId": "21ff913d-b9bc-4f97-9246-f7438e2106f9",
+        }
+    ]
+}
 
 
 def _now_tag() -> str:
@@ -86,19 +91,17 @@ def _now_tag() -> str:
 
 
 def _build_promo_body(discount: int, auto_tag: str, auto_id: str = None) -> dict:
-    """构造 promotions 提交体：仅含 auto coupon（promotionId 全程动态）。
+    """构造完整 promotions 提交体：BASE(2523) + auto coupon(动态 promotionId, 指定折扣)。
 
     - auto_id is None → 新建 auto coupon（不带 promotionId，服务端分配新 id）
     - auto_id 给定     → 更新已存在的 auto coupon（携带真实 id，保持 id 不变）
 
     PATCH /posts/curator/{postId}/promotions 是全量替换语义，
-    但 tear-down 已清空该 post 全部 coupons，body 只需携带本测试的 auto coupon；
-    不再包含任何写死的基线 coupon / promotionId。
+    必须携带全部现存 coupon。
     """
     auto_coupon = {
         **AUTO_COUPON_TEMPLATE,
         "title": auto_tag,
-        "startTime": _now_iso(),
         "amountThresholdDiscounts": [
             {"amountThreshold": 20, "discountPercentage": discount}
         ],
@@ -107,26 +110,24 @@ def _build_promo_body(discount: int, auto_tag: str, auto_id: str = None) -> dict
         auto_coupon["promotionId"] = auto_id
     return {
         "announcements": [],
-        "promotions": [auto_coupon],
+        "promotions": [PROMO_BODY["promotions"][0], auto_coupon],
         "hideCouponBox": False,
     }
 
 
 async def _read_auto_coupon_id(http_client, tag: str) -> str:
-    """通过 admin GET /promotions 按 title + description 唯一匹配服务端分配的 promotionId。
-
-    admin 认证：不落 .env，统一用 ADMIN_EMAIL / ADMIN_PASSWORD 动态登录
-    （POST {ADMIN_URL}/auth/login）。全程不写死 promotionId / token。
-    http_client 参数保留以兼容调用处签名；实际走 admin API。
-    """
-    import asyncio
-
-    from conftest import _admin_find_promotion_id
-
-    return await asyncio.to_thread(
-        _admin_find_promotion_id,
-        title=tag,
-        description="automation test by linda",
+    """GET post detail，按 title 匹配回读服务端分配的 auto coupon promotionId。"""
+    resp = await http_client.get(f"{KATANA_API}{READ_PATH}", headers=KATANA_AUTH_HEADERS)
+    assert resp.status_code == 200, f"GET detail failed: {resp.status_code} {resp.text}"
+    for rp in resp.json()["data"]["relatedProducts"]:
+        pi = rp.get("promotionInfo") or {}
+        if pi.get("title") == tag:
+            promo_id = pi.get("promotionId")
+            assert promo_id, f"auto coupon {tag} promotionId missing: {pi}"
+            return promo_id
+    seen = [rp.get("promotionInfo", {}).get("title") for rp in resp.json()["data"]["relatedProducts"]]
+    raise AssertionError(
+        f"auto coupon title={tag!r} not found in GET post detail. titles seen: {seen}"
     )
 
 
@@ -140,15 +141,14 @@ class TestPromotionCache:
 
         本测试同时承担 setup 职责：
         1. PATCH 不带 promotionId 创建 auto coupon（满 20 减 10%，独特 title）→ 服务端分配新 id
-        2. 通过 admin GET /promotions 按 title + description 唯一匹配回读动态 promotionId，
-           缓存到类属性 TestPromotionCache.auto_id，供后续 invalidation 测试以真实存在的 id
-           做全量替换，全程不写死 id（不写死 2523/2620 等基线）
+        2. GET post detail 按 title 回读动态 promotionId，缓存到类属性 TestPromotionCache.auto_id，
+           供后续 invalidation 测试以真实存在的 id 做全量替换，全程不写死 id
         3. 确认 x-db-query-count header 已部署（PATCH 是写接口，读 DB 是期望行为）
 
         header_integrity_check（session 级）已用全新 userId 验证 x-db-query-count
         真实反映 DB 查询次数，本函数仅做补充：确保 promotion 端点部署了 header。
         """
-        url = promo_path()
+        url = f"{PROMO_BASE_URL}{PROMO_PATH}"
         if getattr(TestPromotionCache, "auto_id", None) is None:
             # 首次：新建 auto coupon（不带 promotionId）
             TestPromotionCache.auto_tag = _now_tag()
@@ -211,7 +211,7 @@ class TestPromotionCache:
         语义约定：GET 读接口期望缓存命中 DB=0；PATCH promotions 是写接口，
         读 DB 是期望行为，不再作为缓存命中目标。
         """
-        url = f"{BASE_URL}{READ_PATH}"
+        url = f"{KATANA_API}{READ_PATH}"
 
         # 预热 — 允许穿透 DB
         resp_warm = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
@@ -229,7 +229,7 @@ class TestPromotionCache:
     @pytest.mark.asyncio
     async def test_promotion_concurrent_reads_hit_cache_after_warmup(self, http_client):
         """预热后并发 10 个 GET 读请求（post detail 触发 promotion service），穿透数应 ≤ 1。"""
-        url = f"{BASE_URL}{READ_PATH}"
+        url = f"{KATANA_API}{READ_PATH}"
 
         # 预热
         resp_warm = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
@@ -296,7 +296,7 @@ class TestPromotionCache:
         if getattr(TestPromotionCache, "auto_id", None) is None:
             TestPromotionCache.auto_tag = _now_tag()
             resp = await http_client.patch(
-                promo_path(),
+                f"{PROMO_BASE_URL}{PROMO_PATH}",
                 headers=promo_auth_headers,
                 json=_build_promo_body(discount=10, auto_tag=TestPromotionCache.auto_tag),
             )
@@ -308,7 +308,7 @@ class TestPromotionCache:
             )
 
         async def _add_to_cart() -> float:
-            resp = await http_client.put(CART_URL, headers=AUTH_HEADERS, json=_cart_body())
+            resp = await http_client.put(CART_URL, headers=AUTH_HEADERS, json=CART_BODY)
             assert resp.status_code == 200, f"Cart add failed: {resp.status_code} {resp.text}"
             item = resp.json()["data"]["items"][0]
             total = item.get("totalCouponDiscount", 0) or 0
@@ -317,7 +317,7 @@ class TestPromotionCache:
 
         async def _patch_auto(discount: int) -> int:
             resp = await http_client.patch(
-                promo_path(),
+                f"{PROMO_BASE_URL}{PROMO_PATH}",
                 headers=promo_auth_headers,
                 json=_build_promo_body(
                     discount=discount,
@@ -342,7 +342,7 @@ class TestPromotionCache:
 
         assert after_per > base_per, (
             f"Coupon 修改后缓存未失效（stale）!\n"
-            f"  Endpoint: PATCH {promo_path()}\n"
+            f"  Endpoint: PATCH {PROMO_BASE_URL}{PROMO_PATH}\n"
             f"  Phase: modify auto coupon(id={TestPromotionCache.auto_id}) 10% -> 20%, "
             f"then read via PUT /cart\n"
             f"  Expected: per-item coupon discount 从 {base_per:.2f} 增大到 ~{base_per * 2:.2f}（折扣翻倍）\n"

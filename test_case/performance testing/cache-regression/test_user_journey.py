@@ -12,33 +12,27 @@ import pytest
 from conftest import (
     assert_zero_db_queries,
     get_db_queries,
-    BASE_URL,
+    KATANA_API,
     KATANA_AUTH_HEADERS,
 )
-from test_storefront import STOREFRONT_ENDPOINTS
-# 统一参数中心：静态路径模板渲染；动态 id 路径由 dynamic_ids 运行时拼接
-from api_params import (
-    CART_PATH,
-    PEAR_POST_PATH,
-    PEAR_STORE_PATH,
-    POST_DETAIL_PATH,
-)
-from dynamic_ids import product_event_path, promoter_sub_path
+from test_storefront import STOREFRONT_ENDPOINTS, USER_ID, PROMOTER_ID
 
 
 # ---- 端点定义 ----
 # Pear SSR 页面
 PEAR_ENDPOINTS = [
-    {"path": PEAR_STORE_PATH, "label": "storefront"},
-    {"path": PEAR_POST_PATH, "label": "post-detail"},
+    {"path": "/resident", "label": "storefront"},
+    {"path": "/resident/post/11756", "label": "post-detail"},
 ]
 
 # Post Detail 阶段 — 4 个 katana API
 POST_DETAIL_ENDPOINTS = [
-    {"path": POST_DETAIL_PATH, "label": "post-detail-main"},
-    {"path": product_event_path(), "label": "product-event"},
-    {"path": CART_PATH, "label": "cart-post-detail"},
-    {"path": promoter_sub_path(), "label": "promoter-sub-post-detail"},
+    {"path": "/posts/consumer/detail?vanityUrl=resident&urlAlias=11756", "label": "post-detail-main"},
+    {"path": "/product-event/3c902839-4847-48a0-b6fe-fba03122053b/public-details",
+     "label": "product-event"},
+    {"path": "/cart", "label": "cart-post-detail"},
+    {"path": f"/promoter-subscription/setting/{USER_ID}?settingType=SUBSCRIPTION",
+     "label": "promoter-sub-post-detail"},
 ]
 
 
@@ -73,7 +67,7 @@ class TestUserJourneyCache:
 
         # Step 2: 预热 Storefront katana API
         for ep in STOREFRONT_ENDPOINTS:
-            url = f"{BASE_URL}{ep['path']}"
+            url = f"{KATANA_API}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
                 f"Storefront warm-up failed [{ep['label']}]: status={resp.status_code}"
@@ -82,7 +76,7 @@ class TestUserJourneyCache:
 
         # Step 3: 预热 Post Detail katana API
         for ep in POST_DETAIL_ENDPOINTS:
-            url = f"{BASE_URL}{ep['path']}"
+            url = f"{KATANA_API}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
                 f"Post-detail warm-up failed [{ep['label']}]: status={resp.status_code}"
@@ -92,7 +86,7 @@ class TestUserJourneyCache:
         # ==================== 验证阶段 ====================
         # Step 4: 先验证 Post Detail katana（模拟用户点击进入）
         for ep in POST_DETAIL_ENDPOINTS:
-            url = f"{BASE_URL}{ep['path']}"
+            url = f"{KATANA_API}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
                 f"Post-detail verify failed [{ep['label']}]: status={resp.status_code}"
@@ -107,7 +101,7 @@ class TestUserJourneyCache:
 
         # Step 5: 再验证 Storefront katana（确认缓存未被污染）
         for ep in STOREFRONT_ENDPOINTS:
-            url = f"{BASE_URL}{ep['path']}"
+            url = f"{KATANA_API}{ep['path']}"
             resp = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
             assert resp.status_code == 200, (
                 f"Storefront verify failed [{ep['label']}]: status={resp.status_code}"
@@ -131,7 +125,8 @@ class TestUserJourneyCache:
                     failures.append(
                         f"SSR console capture failed!\n"
                         f"Resource: {ep['path']}  [{ep['label']}]\n"
-                        f"  navigate_pear_page 返回 count=-1：console 未捕获到 x-db-query-count。"
+                        f"  navigate_pear_page 返回 count=-1，console 未捕获到 x-db-query-count。\n"
+                        f"  请确认 Pear SSR 页面（{ep['path']}）是否仍在 console.log 中输出 x-db-query-count 响应头。"
                     )
                 else:
                     failures.append(

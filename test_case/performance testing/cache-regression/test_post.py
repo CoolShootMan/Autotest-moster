@@ -9,17 +9,14 @@ import pytest
 from conftest import (
     assert_zero_db_queries,
     get_db_queries,
-    BASE_URL,
+    KATANA_API,
     KATANA_AUTH_HEADERS,
 )
-from api_params import (
-    PEAR_POST_PATH,
-    POST_B_PATH,
-    POST_DETAIL_PATH as POST_PATH,
-)
 
 
-# katana API 路径（统一参数中心）：POST_DETAIL_PATH → POST_PATH
+# katana API 路径
+POST_PATH = "/posts/consumer/detail?vanityUrl=resident&urlAlias=11756"
+POST_B_PATH = "/posts/consumer/detail?vanityUrl=resident&urlAlias=ntxccrehh-charity-event"
 
 
 class TestPostCache:
@@ -28,7 +25,7 @@ class TestPostCache:
     @pytest.mark.asyncio
     async def test_post_cold_start_header_sanity(self, http_client):
         """Sanity: 冷启动确认 header 有效（DB>0），二次请求命中缓存（DB=0）。"""
-        url = f"{BASE_URL}{POST_PATH}"
+        url = f"{KATANA_API}{POST_PATH}"
 
         # 冷启动：首次 GET 必须穿透 DB
         resp_cold = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
@@ -49,7 +46,7 @@ class TestPostCache:
         """
         katana API：第一次读取（预热）后，第二次读取必须 0 DB 查询（严格断言）。
         """
-        url = f"{BASE_URL}{POST_PATH}"
+        url = f"{KATANA_API}{POST_PATH}"
 
         # 预热
         resp_warm = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
@@ -66,8 +63,8 @@ class TestPostCache:
         不同 post 各自独立缓存：预热 post A 和 post B 后，各自验证 DB=0，
         并确认 post A 缓存未被 post B 操作污染。
         """
-        url_a = f"{BASE_URL}{POST_PATH}"
-        url_b = f"{BASE_URL}{POST_B_PATH}"
+        url_a = f"{KATANA_API}{POST_PATH}"
+        url_b = f"{KATANA_API}{POST_B_PATH}"
 
         # 1. 预热 post A
         resp_a_warm = await http_client.get(url_a, headers=KATANA_AUTH_HEADERS)
@@ -103,7 +100,7 @@ class TestPostCache:
         """
         from conftest import AUTH_HEADERS
 
-        url = f"{BASE_URL}{POST_PATH}"
+        url = f"{KATANA_API}{POST_PATH}"
 
         # 1. User A 预热
         resp_a_warm = await http_client.get(url, headers=AUTH_HEADERS)
@@ -122,10 +119,10 @@ class TestPostCache:
     @pytest.mark.asyncio
     async def test_ssr_consecutive_reads_hit_cache(self, pear_context):
         """SSR Post Detail 连续两次读取 — 第二次应命中缓存"""
-        from conftest import navigate_pear_page, PEAR_URL
+        from conftest import navigate_pear_page, PEAR_BASE_URL
 
-        path = PEAR_POST_PATH
-        full_url = f"{PEAR_URL}{path}"
+        path = "/resident/post/11756"
+        full_url = f"{PEAR_BASE_URL}{path}"
 
         # 预热：首次加载，触发缓存填充
         count1, status1 = await navigate_pear_page(pear_context, path)
@@ -137,8 +134,11 @@ class TestPostCache:
         if count2 == -1:
             assert False, (
                 f"SSR console capture failed for {full_url}.\n"
-                f"  Check: 1) 页面 console 输出 x-db-query-count（参考 /resident 已验证可捕获），\n"
-                f"         2) args[5] 为 response headers dict。"
+                f"  Verify: 1) Pear SSR page logs x-db-query-count to console,\n"
+                f"          2) Playwright console listener is attached before page.goto(),\n"
+                f"          3) Console msg.args structure matches expected format (args[5] as response headers dict).\n"
+                f"          4) 请确认 Pear SSR 页面（{path}）是否仍在 console.log 中输出 x-db-query-count 响应头；"
+                f"供参考：storefront SSR（/resident）已验证可捕获，若仅 post-detail 失败，需检查该页面 SSR 渲染阶段是否调用了 console.log。"
             )
         assert count2 == 0, (
             f"SSR cache regression detected!\n"
