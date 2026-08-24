@@ -56,7 +56,7 @@ def start_autotest():
     
     # YAML file list to execute, comma-separated (paths relative to Test_Katana/All_YAML/)
     #yaml_files = "All_YAML/Post/Post_setting.yaml,All_YAML/Post/Post_content.yaml,All_YAML/Events/Scanner.yaml,All_YAML/Form/Storefront_form.yaml,All_YAML/Form/Storefront_product_with_form.yaml,All_YAML/Section/Section.yaml"
-    yaml_files = "All_YAML/Post/Post_setting.yaml,All_YAML/Post/Post_content.yaml"
+    yaml_files = "All_YAML/Post/Post_setting_for_venue_map.yaml"
     pytest_args = [
         sys.executable,
         "-m",
@@ -72,26 +72,26 @@ def start_autotest():
     logger.info(f"Running with YAMLs: {yaml_files}")
 
     # ── 1. Fetch cookies for all 3 test accounts ──
-    cookie_script = os.path.join(BASE_DIR, 'tools', 'get_all_cookies.py')
-    logger.info(f"Fetching cookies for all 3 accounts via: {cookie_script}")
-    cookie_result = subprocess.run(
-        [sys.executable, cookie_script],
-        capture_output=True, text=True
-    )
-    logger.info(f"Cookie script done: {cookie_result.stdout}")
-    if cookie_result.returncode != 0:
-        logger.error(f"Cookie script stderr: {cookie_result.stderr}")
+    # cookie_script = os.path.join(BASE_DIR, 'tools', 'get_all_cookies.py')
+    # logger.info(f"Fetching cookies for all 3 accounts via: {cookie_script}")
+    # cookie_result = subprocess.run(
+    #     [sys.executable, cookie_script],
+    #     capture_output=True, text=True
+    # )
+    # logger.info(f"Cookie script done: {cookie_result.stdout}")
+    # if cookie_result.returncode != 0:
+    #     logger.error(f"Cookie script stderr: {cookie_result.stderr}")
 
     # ── 2. Login with latest cookies and dismiss EDU popups ──
-    dismiss_script = os.path.join(BASE_DIR, 'tools', 'dismiss_edu.py')
-    logger.info(f"Dismissing EDU popups for all 3 accounts via: {dismiss_script}")
-    dismiss_result = subprocess.run(
-        [sys.executable, dismiss_script],
-        capture_output=True, text=True
-    )
-    logger.info(f"Dismiss EDU script done: {dismiss_result.stdout}")
-    if dismiss_result.returncode != 0:
-        logger.error(f"Dismiss EDU script stderr: {dismiss_result.stderr}")
+    # dismiss_script = os.path.join(BASE_DIR, 'tools', 'dismiss_edu.py')
+    # logger.info(f"Dismissing EDU popups for all 3 accounts via: {dismiss_script}")
+    # dismiss_result = subprocess.run(
+    #     [sys.executable, dismiss_script],
+    #     capture_output=True, text=True
+    # )
+    # logger.info(f"Dismiss EDU script done: {dismiss_result.stdout}")
+    # if dismiss_result.returncode != 0:
+    #     logger.error(f"Dismiss EDU script stderr: {dismiss_result.stderr}")
 
     # ── 3. Run pytest ──
     result = subprocess.run(pytest_args, capture_output=True, text=True)

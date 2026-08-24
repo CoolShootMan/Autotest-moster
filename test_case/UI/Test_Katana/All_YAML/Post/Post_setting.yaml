@@ -62,7 +62,9 @@ testT1742:
         #Handle optional "Choose a resale model" tooltip/popover -> click "Done"
         #Note: Done is a <p> element, not <button>, need to use text locator
         #Now base.py supports tooltip/popover selectors, text locator should work normally
-        smart_click_optional_done: { name: 'Done' }
+        smart_click_optional_done_1: { name: 'Done' }
+        sleep_step: 1000
+        smart_click_optional_done_2: { name: 'Done' }
         sleep_step: 1000
 
         # smart_click_optional_done_1: { name: 'Done' }
@@ -1855,7 +1857,7 @@ testT3963_VerifyGuestCheckoutShippingFee:
 # Test Case: T5033_5034 Verify the "Choose call-to-action type" function of the event post
 # ==============================================================================
 testT5033_5034_VerifyPartner:
-    description: "Verify that partner can set a product to have free shipping"
+    description: "Verify the 'Choose call-to-action type' function of the event post"
     test_step:
         # Step 1: Duplicate ticket
         open_events_1: "{BASE_URL}/events"
