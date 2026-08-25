@@ -267,12 +267,19 @@ _CURATOR_EMAIL = CURATOR_EMAIL
 
 @lru_cache(maxsize=1)
 def _admin_token() -> str:
-    """POST {ADMIN_URL}/auth/login 获取 admin token（凭据由 .env 提供，会话内缓存）。"""
+    """POST {ADMIN_URL}/auth/login 获取 admin token（凭据由 .env 提供，会话内缓存）。
+
+    CI 环境（GitHub Actions）不提供 .env，ADMIN_EMAIL/ADMIN_PASSWORD 缺失属于
+    "未配置而非故障"：此时跳过依赖 admin 的用例（pytest.skip），而不是抛
+    RuntimeError 让整个测试失败——本地有 .env 时照常执行 admin 相关验证。
+    """
     email = os.getenv("ADMIN_EMAIL")
     password = os.getenv("ADMIN_PASSWORD")
     if not email or not password:
-        raise RuntimeError(
-            "ADMIN_EMAIL / ADMIN_PASSWORD 未设置（.env），无法登录 admin 获取用户 id。"
+        import pytest
+        pytest.skip(
+            "ADMIN_EMAIL / ADMIN_PASSWORD 未设置（CI 无 .env）："
+            "跳过依赖 admin users/search / promotions 的用例。"
         )
     resp = get_sync_client().post(
         f"{ADMIN_URL}/auth/login",

@@ -42,8 +42,8 @@ class TestPdpCache:
     @pytest.mark.asyncio
     async def test_pdp_ssr_second_load_hits_cache(self, pear_context):
         """PDP 首次加载（预热）后，二次加载必须 0 DB 查询。"""
-        # 预热：首次加载，触发缓存填充
-        count1, status1 = await navigate_pear_page(pear_context, PDP_PATH)
+        # 预热：首次加载，触发缓存填充（preprime 先裸加载一次，确保懒加载 XHR 也完成冷读）
+        count1, status1 = await navigate_pear_page(pear_context, PDP_PATH, preprime=True)
         assert status1 == 200, f"PDP warmup failed: status={status1}"
 
         # 验证：二次加载，应命中缓存

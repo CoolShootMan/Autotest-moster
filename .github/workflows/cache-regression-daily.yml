@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload test output (audit report)
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: cache-regression-output
           path: test_case/performance testing/cache-regression/output
