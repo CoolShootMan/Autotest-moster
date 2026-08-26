@@ -23,6 +23,7 @@ import pytest
 from conftest import (
     _admin_auth_headers,
     assert_zero_db_queries,
+    assert_zero_db_queries_async,
     get_db_queries,
     KATANA_AUTH_HEADERS,
     BASE_URL,
@@ -159,5 +160,52 @@ class TestSecondReadUnverified:
         )
         print(
             f"[second-read] GET {POST_DETAIL_PATH}: warmup_db={warmup_db} -> verify_db="
+            f"{get_db_queries(resp_verify)} ✓"
+        )
+
+    @pytest.mark.asyncio
+    async def test_product_event_list_second_read_hits_cache(self, http_client):
+        """GET /product-event/list（curator 登录态）连续读两次：预热 → 二次读取 DB=0。
+
+        product-event/list 是审计报告"未验证"接口（dynamic_ids.event_id 仅 1 次样本）：
+        按登录用户店铺维度过滤的真实读接口，预热后必须命中缓存，否则每次进店
+        都直连 DB 查询事件列表。
+
+        注意：list 按店铺维度过滤，guest 视角恒为空，必须用 curator sign-in token。
+        """
+        import os as _os
+
+        if not _os.getenv("CURATOR_PASSWORD"):
+            pytest.skip(
+                "CURATOR_PASSWORD 未配置（CI 无 .env）：跳过 product-event/list 二次读验证"
+            )
+
+        from dynamic_ids import _curator_token
+
+        path = "/product-event/list?keyword=&pageSize=50&pageNumber=1"
+        url = f"{BASE_URL}{path}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {_curator_token()}",
+        }
+
+        # 预热 — 允许穿透 DB
+        resp_warm = await http_client.get(url, headers=headers)
+        assert resp_warm.status_code == 200, (
+            f"product-event/list warm-up failed: {resp_warm.status_code} {resp_warm.text[:200]}"
+        )
+        warmup_db = get_db_queries(resp_warm)
+
+        # 验证 — 二次读取必须缓存命中（DB=0），吸收 BE 瞬态穿透
+        resp_verify = await http_client.get(url, headers=headers)
+        assert resp_verify.status_code == 200, (
+            f"product-event/list verify failed: {resp_verify.status_code} {resp_verify.text[:200]}"
+        )
+        await assert_zero_db_queries_async(
+            resp_verify, http_client, url, headers,
+            resource=path, attempt="verify", warmup_db_queries=warmup_db,
+        )
+        print(
+            f"[second-read] GET {path}: warmup_db={warmup_db} -> verify_db="
             f"{get_db_queries(resp_verify)} ✓"
         )

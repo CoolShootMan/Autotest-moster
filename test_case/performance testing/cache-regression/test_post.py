@@ -8,6 +8,7 @@ KAT-11756 Task 2: Post Detail Cache Validation.
 import pytest
 from conftest import (
     assert_zero_db_queries,
+    assert_zero_db_queries_async,
     get_db_queries,
     BASE_URL,
     KATANA_AUTH_HEADERS,
@@ -58,7 +59,10 @@ class TestPostCache:
         # 验证
         resp_verify = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
         assert resp_verify.status_code == 200, f"Verify failed: {resp_verify.status_code}"
-        assert_zero_db_queries(resp_verify, resource=POST_PATH, attempt="verify")
+        await assert_zero_db_queries_async(
+            resp_verify, http_client, url, KATANA_AUTH_HEADERS,
+            resource=POST_PATH, attempt="verify",
+        )
 
     @pytest.mark.asyncio
     async def test_different_posts_cached_independently(self, http_client):
@@ -127,8 +131,9 @@ class TestPostCache:
         path = PEAR_POST_PATH
         full_url = f"{PEAR_URL}{path}"
 
-        # 预热：首次加载，触发缓存填充
-        count1, status1 = await navigate_pear_page(pear_context, path)
+        # 预热：首次加载，触发缓存填充（preprime 先裸加载一次，确保 product-event /
+        # promoter-subscription 等懒加载 XHR 也完成冷读；cart/posts 已在 SSR count 中排除）
+        count1, status1 = await navigate_pear_page(pear_context, path, preprime=True)
         assert status1 == 200, f"SSR warmup failed: status={status1}"
 
         # 验证：二次加载，应命中缓存

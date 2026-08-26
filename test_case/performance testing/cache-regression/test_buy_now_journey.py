@@ -45,6 +45,7 @@ from api_params import BASE_URL, PEAR_URL, POST_DETAIL_PATH, CURATOR_POST_ALIAS
 from conftest import (
     AUTH_HEADERS,
     assert_zero_db_queries,
+    assert_zero_db_queries_async,
     attach_pear_page_audit,
     get_db_queries,
 )
@@ -97,8 +98,9 @@ class TestBuyNowJourneyCache:
                 f"{resp.text[:200]}"
             )
             try:
-                assert_zero_db_queries(
-                    resp, resource=ep["path"], attempt="verify", url=url,
+                await assert_zero_db_queries_async(
+                    resp, http_client, url, AUTH_HEADERS,
+                    resource=ep["path"], attempt="verify",
                     warmup_db_queries=ep.get("warmup_db"),
                 )
             except AssertionError as exc:
