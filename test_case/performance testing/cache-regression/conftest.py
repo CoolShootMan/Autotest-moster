@@ -266,8 +266,16 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
 
     if preprime:
         # 裸加载：触发页面全部 XHR（含懒加载）冷读并填充缓存；不计审计、不计数。
+        # 用 domcontentloaded + 等首个业务 XHR，避免 networkidle 早于 JS 执行导致冷读没发生。
         _page: Page = await context.new_page()
-        await _page.goto(f"{PEAR_URL}{path}", wait_until="networkidle", timeout=30000)
+        await _page.goto(f"{PEAR_URL}{path}", wait_until="domcontentloaded", timeout=30000)
+        try:
+            await _page.wait_for_response(
+                lambda r: r.request.method == "GET" and "katana-api" in r.url,
+                timeout=20000,
+            )
+        except Exception:
+            pass
         await asyncio.sleep(2)
         await _page.close()
 
@@ -306,40 +314,82 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
         _db_gets.append((r.url, db))
 
     page.on("response", _on_response)
-    response = await page.goto(
-        f"{PEAR_URL}{path}",
-        wait_until="networkidle",
-        timeout=30000
-    )
-    # 等页面内 XHR/console 刷新完成（保持短间隔：SSR 页面内只读资源缓存 TTL 约
-    # 10-15s，验证间隔需远小于 TTL 才能验证"命中"，过长会因正常过期而误报）
-    await asyncio.sleep(1)
 
-    if _skipped_gap:
-        print(
-            f"[ssr-audit] 已知 BE 缺口端点（已排除，由 httpx 用例 xfail 上报）: "
-            f"{'; '.join(_skipped_gap)}"
-        )
+    # 页面业务 XHR 由 JS 懒加载触发，networkidle 常在 JS 执行前判定，固定 sleep
+    # 会让统计窗口早于懒加载 XHR 关闭（CI 曾 count=-1 仅捕获静态资源，2026-08-26）。
+    # 故改为：goto 用 domcontentloaded，随后轮询等待业务 GET 静默（1.5s 无新增即视为
+    # 静默，上限 20s）；count=-1 且本次连业务 XHR 都未发起（纯静态资源）时，视为偶发
+    # 渲染/时序失败，自动重载重试一次，消除 flaky。
+    import time as _time
 
-    count = sum(db for _, db in _db_gets) if _db_gets else -1
-    if count == -1 and _all_gets:
-        # count=-1 表示未捕获到任何带 X-DB-Query-Count 的 2xx GET。打印本次加载
-        # 全部 GET 响应（含 304/401/403/5xx），区分"页面 XHR 未发起/被 304/被 401
-        # 拦截"等真实原因，避免再误判为 console/监听时机问题（2026-08-26 定位）。
+    final_count, final_status = -1, 0
+    for attempt in range(2):
+        response = await page.goto(
+            f"{PEAR_URL}{path}",
+            wait_until="domcontentloaded",
+            timeout=30000,
+        )
+        # 等待业务 XHR 静默：轮询直到 1.5s 内无新业务 GET 响应（_db_gets+_skipped_gap
+        # 数量不再增长）或 20s 超时。相比固定 sleep，能覆盖懒加载 XHR 晚于 networkidle
+        # 发起的情况；同时保持对 TTL(~10-15s) 的敏感性——静默后即关闭窗口，不拖长验证间隔。
+        _deadline = _time.monotonic() + 20
+        _prev_biz = len(_db_gets) + len(_skipped_gap)
+        _last_changed = _time.monotonic()
+        while _time.monotonic() < _deadline:
+            _cur_biz = len(_db_gets) + len(_skipped_gap)
+            if _cur_biz > _prev_biz:
+                _prev_biz = _cur_biz
+                _last_changed = _time.monotonic()
+            elif _time.monotonic() - _last_changed >= 1.5:
+                break
+            await asyncio.sleep(0.25)
+
+        if _skipped_gap:
+            print(
+                f"[ssr-audit] 已知 BE 缺口端点（已排除，由 httpx 用例 xfail 上报）: "
+                f"{'; '.join(_skipped_gap)}"
+            )
+
+        _count = sum(db for _, db in _db_gets) if _db_gets else -1
+        _status = response.status if response else 0
+        if _count == -1 and _all_gets:
+            # count=-1 表示未捕获到任何带 X-DB-Query-Count 的 2xx GET。打印本次加载
+            # 全部 GET 响应（含 304/401/403/5xx），区分"页面 XHR 未发起/被 304/被 401
+            # 拦截"等真实原因，避免再误判为 console/监听时机问题（2026-08-26 定位）。
+            print(
+                f"[ssr-audit] {path} count=-1 诊断：本次加载捕获 {len(_all_gets)} 条 GET"
+                f"（含非 2xx），无任何带 X-DB-Query-Count 的 2xx："
+            )
+            for line in _all_gets[-40:]:
+                print(f"    {line}")
+        if _count > 0:
+            detail = "; ".join(
+                f"DB={db} {url[:80]}" for url, db in _db_gets if db > 0
+            )
+            print(f"[ssr-audit] {path} 本次加载 count={_count} 明细: {detail}")
+
+        _has_biz_xhr = any("katana-api" in u for u in _all_gets)
+        if _count != -1 or _has_biz_xhr:
+            final_count, final_status = _count, _status
+            break
+        # count=-1 且无业务 XHR（纯静态资源）：页面 JS 未执行到数据请求阶段，偶发
+        # 渲染失败，重载一次再试（同一 context 新 page）。
         print(
-            f"[ssr-audit] {path} count=-1 诊断：本次加载捕获 {len(_all_gets)} 条 GET"
-            f"（含非 2xx），无任何带 X-DB-Query-Count 的 2xx："
+            f"[ssr-audit] {path} count=-1 且本次加载未发起任何业务 XHR"
+            f"（{len(_all_gets)} 条 GET 均为静态资源），重载重试 attempt={attempt + 1}/2"
         )
-        for line in _all_gets[-40:]:
-            print(f"    {line}")
-    if count > 0:
-        detail = "; ".join(
-            f"DB={db} {url[:80]}" for url, db in _db_gets if db > 0
-        )
-        print(f"[ssr-audit] {path} 本次加载 count={count} 明细: {detail}")
-    status = response.status if response else 0
+        await page.close()
+        page = await context.new_page()
+        attach_pear_page_audit(page)
+        page.on("response", _on_response)
+        _db_gets.clear()
+        _skipped_gap.clear()
+        _all_gets.clear()
+    else:
+        final_count, final_status = _count, _status
+
     await page.close()
-    return count, status
+    return final_count, final_status
 
 
 # ---- 工具函数 ----
