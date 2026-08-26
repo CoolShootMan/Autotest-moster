@@ -172,17 +172,32 @@ async def pear_context():
 
     每个测试函数独立创建/销毁 browser context，避免跨测试 cookie 污染。
 
-    注入统一 AUTH_HEADERS（与 http_client 用例同 token）：页面内 GET（/cart、
+    注入统一鉴权 headers（与 http_client 用例同 token 口径）：页面内 GET（/cart、
     product-event、posts/consumer/detail 等）与 httpx 预热共享缓存 key，二次加载
     才能稳定命中缓存（DB=0）。2026-08-25 实测：匿名（无 Authorization）页面加载
     时这些接口以无会话 guest 身份每次新建缓存 key，二次读 DB 剧烈波动（0/1/3/11），
     非真实用户场景，故统一注入 AUTH 使 SSR 断言可靠。
+
+    注意：token 必须"当前时刻"新鲜签发（绕过 _user_b_guest 的 lru_cache），
+    不能复用模块级 AUTH_HEADERS 的会话级 token。完整测试套件耗时可达 2 分钟，
+    guest JWT TTL 实测约 100s：靠后的 SSR 用例（如 test_storefront_ssr_hit_cache，
+    位于 96%）若复用会话 token 已过期，页面内业务 XHR 全部 401（非 2xx），
+    navigate_pear_page 统计不到任何带 X-DB-Query-Count 的 2xx GET → count2==-1
+    误报"捕获失败"。每次创建 context 时现签发，保证页面内 XHR 恒 2xx。
     """
     from playwright.async_api import async_playwright
+    import dynamic_ids
+
+    token, _ = dynamic_ids._user_b_guest.__wrapped__()  # 绕过 lru_cache，取最新 guest JWT
+    _headers = {
+        **COMMON_HEADERS,
+        "Authorization": f"Bearer {token}",
+        **PEAR_AUTO_TESTING_HEADER,
+    }
 
     pw = await async_playwright().start()
     browser = await pw.chromium.launch(headless=True)
-    ctx = await browser.new_context(extra_http_headers=AUTH_HEADERS)
+    ctx = await browser.new_context(extra_http_headers=_headers)
     yield ctx
     await ctx.close()
     await browser.close()
