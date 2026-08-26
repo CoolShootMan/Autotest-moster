@@ -275,6 +275,7 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
     attach_pear_page_audit(page)
     _db_gets: list[tuple[str, int]] = []  # 页面加载期间带 DB 头的 2xx GET（url, db）
     _skipped_gap: list[str] = []  # 已知 BE 缺口 / 专项兜底端点（排除，不参与页面 count）
+    _all_gets: list[str] = []  # 页面加载期间全部 GET 响应（含非 2xx），供 count=-1 诊断
 
     # 已知 BE 缺口端点（预热后二次读固定 DB>0，由 httpx 用例 xfail 显式上报）与
     # 写-读联动/TTL 敏感资源（预热后二次读由 httpx 专项用例在受控短间隔下严格验证
@@ -286,6 +287,8 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
     _SSR_EXCLUDE = ("store-front/shop/resident", "/cart", "/posts/consumer/detail")
 
     def _on_response(r):
+        if r.request.method == "GET":
+            _all_gets.append(f"{r.status} {r.url[:110]}")
         if r.request.method != "GET" or not (200 <= r.status < 300):
             return
         db_raw = r.headers.get("x-db-query-count")
@@ -319,6 +322,16 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
         )
 
     count = sum(db for _, db in _db_gets) if _db_gets else -1
+    if count == -1 and _all_gets:
+        # count=-1 表示未捕获到任何带 X-DB-Query-Count 的 2xx GET。打印本次加载
+        # 全部 GET 响应（含 304/401/403/5xx），区分"页面 XHR 未发起/被 304/被 401
+        # 拦截"等真实原因，避免再误判为 console/监听时机问题（2026-08-26 定位）。
+        print(
+            f"[ssr-audit] {path} count=-1 诊断：本次加载捕获 {len(_all_gets)} 条 GET"
+            f"（含非 2xx），无任何带 X-DB-Query-Count 的 2xx："
+        )
+        for line in _all_gets[-40:]:
+            print(f"    {line}")
     if count > 0:
         detail = "; ".join(
             f"DB={db} {url[:80]}" for url, db in _db_gets if db > 0
