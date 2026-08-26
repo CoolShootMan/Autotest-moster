@@ -27,6 +27,23 @@ jobs:
           # SSR 用例依赖浏览器 console 抓取，需安装 chromium
           playwright install --with-deps chromium
 
+      # 从仓库 Secrets 生成 .env.release，使依赖 curator/admin 凭据的
+      # "二次读验证"用例（feature-flag / checkout / buy-now / product-event-list）
+      # 在 CI 上真正执行，消除审计"未验证"盲区。
+      - name: Prepare .env from secrets
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          {
+            echo "ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}"
+            echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}"
+            echo "CURATOR_PASSWORD=${{ secrets.CURATOR_PASSWORD }}"
+            echo "PEAR_CLIENT_ID=${{ secrets.PEAR_CLIENT_ID }}"
+            echo "PEAR_CLIENT_SECRET=${{ secrets.PEAR_CLIENT_SECRET }}"
+          } > .env.release
+          echo "=== .env.release generated (keys only) ==="
+          sed 's/=.*/=<redacted>/' .env.release
+
       - name: Run cache-regression tests
         working-directory: test_case/performance testing/cache-regression
         run: pytest -v
