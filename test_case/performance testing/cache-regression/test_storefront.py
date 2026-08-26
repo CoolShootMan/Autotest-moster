@@ -150,8 +150,11 @@ class TestStorefrontCache:
         path = PEAR_STORE_PATH
         full_url = f"{PEAR_URL}{path}"
 
-        # 预热：首次加载，触发缓存填充（保持 warm→verify 短间隔，小于页面内资源缓存 TTL）
-        count1, status1 = await navigate_pear_page(pear_context, path)
+        # 预热：首次加载，触发缓存填充（preprime 先裸加载一次，确保
+        # promoter-subscription / consumer-signup / consumer-public 等页面内懒加载
+        # XHR 也完成冷读，否则 verify 加载时这些 XHR 首次冷读会被误判为二次读泄漏；
+        # 与 test_post.test_ssr_consecutive_reads_hit_cache 的 warm 口径保持一致）
+        count1, status1 = await navigate_pear_page(pear_context, path, preprime=True)
         assert status1 == 200, f"SSR warmup failed: status={status1}"
 
         # 验证：二次加载，应命中缓存
@@ -159,10 +162,12 @@ class TestStorefrontCache:
         assert status2 == 200, f"SSR verify failed: status={status2}"
         if count2 == -1:
             assert False, (
-                f"SSR console capture failed for {full_url}.\n"
-                f"  Verify: 1) Pear SSR page logs x-db-query-count to console,\n"
-                f"          2) Playwright console listener is attached before page.goto(),\n"
-                f"          3) Console msg.args structure matches expected format (args[5] as response headers dict)."
+                f"SSR response capture failed for {full_url}: verify 加载期间未捕获到"
+                f" 任何带 X-DB-Query-Count 的 2xx GET 响应（count=-1）。\n"
+                f"  Check: 1) 页面内业务 XHR 是否在 networkidle+sleep(1) 统计窗口内发起"
+                f"（懒加载 XHR 可能晚于统计窗口，需 warm 走 preprime），\n"
+                f"          2) 页面内 XHR 是否为 2xx 且带 X-DB-Query-Count header，\n"
+                f"          3) AUTH_HEADERS token 是否仍有效（401/403 不计入 2xx）。"
             )
         assert count2 == 0, (
             f"SSR cache regression detected!\n"
