@@ -622,18 +622,108 @@ def header_integrity_check():
 
 
 # ---- 测试结束后的 GET API DB 审计报告 ----
+# ---- URL 归一化（按接口模式聚合，动态参数值模糊化） ----
+# 根因：审计若按"原始 URL 实例"分组，动态参数（userId UUID、fbAdParams eventID、
+# coupon 名时间戳、searchTerm 查询词）每次不同 → 同一接口的每个实例各只有 1 次
+# 请求 → 永远标"未验证"，补了二次读用例也反复冒出。
+# 归一化到接口模式：UUID → {uuid}、6+ 位长数字串 → {num}、
+# searchTerm / eventID 等动态查询参数值 → {value}。
+# 同一接口的所有实例归为一组，"未验证/违规/通过"按接口模式判定。
+_UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+_LONG_NUM_RE = re.compile(r"\d{6,}")
+# 动态查询参数（值属用户输入/追踪参数，天然每次不同，需整体模式化）：
+# searchTerm（admin promotions 查询词）、fbAdParams[eventID]（checkout 广告追踪）。
+_DYNAMIC_QUERY_VALUE_RE = re.compile(
+    r"(?P<pre>[?&])(?P<key>searchTerm|fbAdParams(?:\[|%5B)eventID(?:\]|%5D))=(?P<val>[^&\s]*)"
+)
+
+
 def _normalize_url(url: str) -> str:
-    """URL 归一化：去除尾部空 query（如 `cart?` → `cart`），避免同接口被拆散。"""
-    return url[:-1] if url.endswith("?") else url
+    """URL 归一化到接口模式：
+    1) 去除尾部空 query（`cart?` → `cart`）；
+    2) 动态值模糊化：UUID → {uuid}、6+ 位长数字串 → {num}；
+       searchTerm / eventID 等动态查询参数值 → {value}。
+
+    同一接口的不同实例（不同 userId / eventID / coupon 名 / 搜索词）归为一组，
+    审计按接口模式判定，避免动态参数实例反复冒"未验证"。
+    """
+    if url.endswith("?"):
+        url = url[:-1]
+    url = _DYNAMIC_QUERY_VALUE_RE.sub(
+        lambda m: f"{m.group('pre')}{m.group('key')}={{value}}", url
+    )
+    url = _LONG_NUM_RE.sub("{num}", _UUID_RE.sub("{uuid}", url))
+    return url
+
+
+# ---- BE 已知缺口注册表（已确认的后端问题，审计报告强制展示，不放过） ----
+# 每条 = 测试已确认的后端缺陷（缓存 key 未归一化 / 路由缺失 / 埋点未部署）。
+# 相关用例均以 @xfail(strict=False) 显式标注并给出详细 reason；此处注册表让
+# 审计报告每次运行都输出"BE 已知缺口"章节，展示接口模式 + 本次运行证据 +
+# 问题描述 + 修复方向，防止缺陷被 @xfail 静默吞掉。
+_KNOWN_BE_GAPS = [
+    {
+        "id": "BE-GAP-001",
+        "pattern": "GET /order/checkout?fbAdParams[eventID]={value}",
+        "match": lambda url: "/order/checkout" in url and "fbAdParams" in url,
+        "issue": (
+            "缓存 key 未对 fbAdParams[eventID] 归一化：eventID 每次随机生成，"
+            "同页面重复加载缓存命中率波动（实测 warm=0 / verify 在 [0,1,2] 间波动，"
+            "约 1/3 复现），大流量下会间歇性打到 DB"
+        ),
+        "evidence": (
+            "test_checkout_journey.py::test_checkout_page_second_load_hits_cache "
+            "（Playwright 完整结算旅程 + 固定 URL 重放，@xfail strict=False）"
+        ),
+        "fix": "BE 将 fbAdParams[eventID] 从缓存 key 中剥离/归一化后再计算缓存指纹",
+        "status": "open",
+    },
+    {
+        "id": "BE-GAP-002",
+        "pattern": "GET /posts/curator/{postId}/promotions",
+        "match": lambda url: "/posts/curator/" in url and "/promotions" in url,
+        "issue": (
+            "GET 路由未注册（当前仅 PATCH 全量替换语义），GET 返回 404 "
+            "'Cannot GET .../promotions' 且无 X-DB-Query-Count 埋点，"
+            "promotion 读路径无法验证缓存命中"
+        ),
+        "evidence": (
+            "test_second_read.py::test_posts_curator_promotions_second_read_hits_cache "
+            "与 test_promotion.py:410（均 @xfail strict=False）"
+        ),
+        "fix": "BE 实现 GET /posts/curator/{postId}/promotions 读路由并部署 DB 计数埋点",
+        "status": "open",
+    },
+    {
+        "id": "BE-GAP-003",
+        "pattern": "admin 域（release.admin.katana-api.1m.app）",
+        "match": lambda url: "admin.katana-api.1m.app" in url,
+        "issue": (
+            "admin 域整体未部署 X-DB-Query-Count 埋点（db=-1），admin 侧 GET "
+            "无法纳入 0-DB 违规判定，admin 接口是否读 DB 处于盲区"
+        ),
+        "evidence": (
+            "test_second_read.py::test_admin_promotions_second_read_status_ok "
+            "（仅断言 HTTP 200，无法做 DB=0 断言）"
+        ),
+        "fix": "BE 在 admin 域网关/中间件统一注入 X-DB-Query-Count 响应头",
+        "status": "open",
+    },
+]
 
 
 def _write_get_db_audit_report() -> str:
     """生成 GET API DB 审计报告，返回报告文件绝对路径。
 
     判定口径：
+    - 分组按接口模式（动态参数值归一化），同一接口不同实例归为一组；
+    - 违规判定按实例（同一原始 URL 的第 2 次及以后 DB>0 才算缓存未命中，
+      避免不同动态实例交叉误判，如 checkout 每次新 eventID 的页面级 DB 波动）；
     - 同一归一化 GET URL 的 2xx 请求序列中，第 1 次（冷启动/预热）DB>0 视为正常穿透；
     - 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规（大流量涌入时会打到 DB，风险接口）；
-    - 仅 1 次 2xx 请求的接口：无二次读取样本，标记"未验证"，不判通过也不判违规；
+    - 接口模式内无任何实例有二次读取样本 → 标记"未验证"，不判通过也不判违规；
     - 非 2xx 响应的 DB 计数不可信，不参与违规判定；
     - 请求来源含 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类
       （source ∈ {httpx, playwright}），全部纳入统计，不再有审计盲区。
@@ -667,31 +757,52 @@ def _write_get_db_audit_report() -> str:
     passed = []
     details = []
     for url, entries in grouped.items():
+        # 实例级细分：同一接口模式下，按原始 URL 区分实例。
+        # 违规判定基于实例（同一 URL 的第 2 次及以后 DB>0 才算缓存未命中），
+        # 避免不同动态实例（如 checkout 每次新 eventID、页面级加载 DB 波动）
+        # 交叉误判为违规。
+        instance_map = OrderedDict()
+        for e in entries:
+            instance_map.setdefault(e["url"], []).append(e)
+
+        leaked = []
+        for inst_url, inst_entries in instance_map.items():
+            inst_status = [e["status"] for e in inst_entries]
+            inst_db = [e["db"] for e in inst_entries]
+            valid_indices = [i for i, s in enumerate(inst_status) if 200 <= s < 300]
+            # 实例内第 2 次 2xx 起 DB>0 → 缓存未命中（首个 2xx 视为预热穿透）
+            for n, i in enumerate(valid_indices):
+                if n >= 1 and inst_db[i] > 0:
+                    leaked.append((inst_url, n + 1, inst_db[i], inst_status[i]))
+
         db_seq = [e["db"] for e in entries]
         status_seq = [e["status"] for e in entries]
-        # 仅 2xx 响应计入 DB 判定（非 2xx 时 DB 计数不可信）
-        valid_indices = [i for i, s in enumerate(status_seq) if 200 <= s < 300]
-        # 违规：按 2xx 有效请求序列的第 2 次及以后 DB>0 判定；
-        # 首个 2xx（无论其在原始序列中的位置）视为冷启动/预热穿透，不判违规。
-        leaked = [
-            (i + 1, db_seq[i], status_seq[i])
-            for n, i in enumerate(valid_indices)
-            if n >= 1 and db_seq[i] > 0
-        ]
-        first_db = db_seq[0] if db_seq else -1
-        first_ok = 200 <= status_seq[0] < 300
+        # 模式级"未验证"：所有实例都只有 1 次 2xx 请求（无任何实例有二次读取样本），
+        # 该接口模式从未被验证过预热后是否命中缓存。
+        has_second_sample = any(
+            sum(1 for e in inst if 200 <= e["status"] < 300) >= 2
+            for inst in instance_map.values()
+        )
         is_violation = len(leaked) > 0
         dist_counter = collections.Counter(db_seq)
         dist = " | ".join(
             f"{q}DB×{c}次" for q, c in sorted(dist_counter.items())
         )
-        n_2xx = len(valid_indices)
         if is_violation:
             status_mark = "违规(预热后未命中)"
-            violations.append((url, db_seq, status_seq))
-        elif n_2xx < 2:
-            # 仅 1 次 2xx 请求：无二次读取样本，无法验证预热后是否命中缓存
-            status_mark = "未验证(仅1次请求)"
+            # 违规详情按实例列出（同一接口多个实例各自违规则分列）
+            for inst_url, inst_entries in instance_map.items():
+                inst_status = [e["status"] for e in inst_entries]
+                inst_db = [e["db"] for e in inst_entries]
+                valid_indices = [i for i, s in enumerate(inst_status) if 200 <= s < 300]
+                inst_leaked = any(
+                    n >= 1 and inst_db[i] > 0 for n, i in enumerate(valid_indices)
+                )
+                if inst_leaked:
+                    violations.append((inst_url, inst_db, inst_status))
+        elif not has_second_sample:
+            # 无任何实例有二次读取样本：无法验证预热后是否命中缓存
+            status_mark = "未验证(无实例二次读取样本)"
             unverified.append((url, len(entries), dist, status_mark))
         else:
             status_mark = "通过(预热后DB=0)"
@@ -701,8 +812,9 @@ def _write_get_db_audit_report() -> str:
     lines.append(f"## 结果总览")
     lines.append("")
     lines.append(f"- **违规接口数（预热后仍读 DB）：{len(violations)}**")
-    lines.append(f"- 未验证接口数（仅 1 次请求，无二次读取样本）：{len(unverified)}")
+    lines.append(f"- 未验证接口数（无实例二次读取样本）：{len(unverified)}")
     lines.append(f"- 通过接口数（预热后 DB=0）：{len(passed)}")
+    lines.append(f"- **BE 已知缺口（已确认后端问题，见专章）：{len(_KNOWN_BE_GAPS)}**")
     lines.append("")
     if not violations:
         lines.append("### 全部 GET 均为 0 DB 读取（预热后缓存完全命中），无违规项。")
@@ -719,12 +831,36 @@ def _write_get_db_audit_report() -> str:
             lines.append(f"| {idx} | `{url}` | {seq_str} |")
         lines.append("")
 
-    lines.append("## 未验证接口（仅 1 次请求，大流量前建议补二次读取验证）")
+    lines.append("## 未验证接口（无实例二次读取样本，大流量前建议补二次读取验证）")
     lines.append("")
     lines.append("| # | GET URL | 请求次数 | DB 分布 |")
     lines.append("|---|---------|---------|---------|")
     for idx, (url, count, dist, _) in enumerate(unverified, 1):
         lines.append(f"| {idx} | `{url}` | {count} | {dist} |")
+    lines.append("")
+
+    # ---- BE 已知缺口：已确认的后端问题，每次运行强制展示，不放过 ----
+    lines.append("## BE 已知缺口（已确认后端问题，需修复）")
+    lines.append("")
+    lines.append("- 以下为测试确认的后端缺陷（缓存 key 未归一化 / GET 路由缺失 / DB 埋点未部署）。")
+    lines.append("- 相关用例均以 @xfail(strict=False) 显式标注；BE 修复后对应用例自动 XPASS 提示。")
+    lines.append("- 本表每次运行强制输出，即使缺口接口本次未触发也保留条目，防止缺陷被静默吞掉。")
+    lines.append("")
+    lines.append("| # | 接口/域 | 问题描述 | 本次运行证据 | 修复方向 | 状态 |")
+    lines.append("|---|--------|---------|-------------|---------|------|")
+    for idx, gap in enumerate(_KNOWN_BE_GAPS, 1):
+        matched = [e for e in get_entries if gap["match"](e["url"])]
+        if matched:
+            inst_seq = []
+            for e in matched:
+                inst_seq.append(f"HTTP {e['status']} / DB {e['db']} ({e['source']})")
+            evidence = f"命中 {len(matched)} 次：{', '.join(inst_seq)}"
+        else:
+            evidence = "本次运行未触发（对应 @xfail 用例可能被跳过）"
+        lines.append(
+            f"| {idx} | `{gap['pattern']}` | {gap['issue']} | {evidence} "
+            f"| {gap['fix']} | {gap['status']} |"
+        )
     lines.append("")
 
     lines.append("## 全部 GET 明细")
@@ -766,12 +902,14 @@ def _write_get_db_audit_report() -> str:
 
     lines.append("## 判定口径")
     lines.append("")
-    lines.append("- 同一归一化 GET URL 的 2xx 请求序列中，第 1 次（冷启动/预热）DB>0 视为正常穿透；")
-    lines.append("- 第 2 次及以后仍 DB>0 → 缓存未命中，判定违规；")
-    lines.append("- 仅 1 次 2xx 请求的接口标记'未验证'（无二次读取样本，不判通过/违规）；")
+    lines.append("- 同一归一化 GET URL（接口模式）的 2xx 请求序列中，第 1 次（冷启动/预热）DB>0 视为正常穿透；")
+    lines.append("- 违规判定按实例（同一原始 URL）：第 2 次及以后仍 DB>0 → 缓存未命中，判定违规；")
+    lines.append("- 接口模式内无任何实例有二次读取样本 → 标记'未验证'（不判通过/违规）；")
     lines.append("- 非 2xx 响应的 DB 计数不可信，不参与违规判定；")
     lines.append("- 请求来源覆盖 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类；")
     lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）。")
+    lines.append("- 'BE 已知缺口'章节为已确认后端缺陷（缓存 key 未归一化 / GET 路由缺失 / 埋点缺失），")
+    lines.append("  由 _KNOWN_BE_GAPS 注册表驱动，每次运行强制输出，不以 xfail 静默。")
 
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
