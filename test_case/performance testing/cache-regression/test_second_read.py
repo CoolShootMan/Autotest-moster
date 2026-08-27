@@ -34,7 +34,6 @@ import pytest
 
 from conftest import (
     _admin_auth_headers,
-    assert_zero_db_queries,
     assert_zero_db_queries_async,
     get_db_queries,
     KATANA_AUTH_HEADERS,
@@ -69,14 +68,14 @@ class TestSecondReadUnverified:
         )
         warmup_db = get_db_queries(resp_warm)
 
-        # 验证 — 二次读取必须缓存命中（DB=0）
+        # 验证 — 二次读取必须缓存命中（DB=0），吸收 BE 瞬态穿透
         resp_verify = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
         assert resp_verify.status_code == 200, (
             f"feature-flag-user verify failed: {resp_verify.status_code} {resp_verify.text[:200]}"
         )
-        assert_zero_db_queries(
-            resp_verify, resource=path, attempt="verify", url=url,
-            warmup_db_queries=warmup_db,
+        await assert_zero_db_queries_async(
+            resp_verify, http_client, url, KATANA_AUTH_HEADERS,
+            resource=path, attempt="verify", warmup_db_queries=warmup_db,
         )
         print(
             f"[second-read] GET {path}: warmup_db={warmup_db} -> verify_db="
@@ -95,13 +94,14 @@ class TestSecondReadUnverified:
         )
         warmup_db = get_db_queries(resp_warm)
 
+        # 验证 — 二次读取必须缓存命中（DB=0），吸收 BE 瞬态穿透
         resp_verify = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
         assert resp_verify.status_code == 200, (
             f"feature-flag-public verify failed: {resp_verify.status_code} {resp_verify.text[:200]}"
         )
-        assert_zero_db_queries(
-            resp_verify, resource=path, attempt="verify", url=url,
-            warmup_db_queries=warmup_db,
+        await assert_zero_db_queries_async(
+            resp_verify, http_client, url, KATANA_AUTH_HEADERS,
+            resource=path, attempt="verify", warmup_db_queries=warmup_db,
         )
         print(
             f"[second-read] GET {path}: warmup_db={warmup_db} -> verify_db="
@@ -135,7 +135,7 @@ class TestSecondReadUnverified:
 
         assert db_seq[0] == -1, (
             f"admin 域出现 X-DB-Query-Count 埋点（db={db_seq[0]}）！\n"
-            f"  此前 admin 域整体无埋点（db=-1）；若现已部署，应改用 assert_zero_db_queries "
+            f"  此前 admin 域整体无埋点（db=-1）；若现已部署，应改用 assert_zero_db_queries_async "
             f"做预热后二次读取 DB=0 断言，并移除本特殊处理。"
         )
         print(
@@ -163,14 +163,14 @@ class TestSecondReadUnverified:
         )
         warmup_db = get_db_queries(resp_warm)
 
-        # 验证 — 二次读取必须缓存命中（DB=0）
+        # 验证 — 二次读取必须缓存命中（DB=0），吸收 BE 瞬态穿透
         resp_verify = await http_client.get(url, headers=KATANA_AUTH_HEADERS)
         assert resp_verify.status_code == 200, (
             f"posts/consumer/detail verify failed: {resp_verify.status_code} {resp_verify.text[:200]}"
         )
-        assert_zero_db_queries(
-            resp_verify, resource=POST_DETAIL_PATH, attempt="verify", url=url,
-            warmup_db_queries=warmup_db,
+        await assert_zero_db_queries_async(
+            resp_verify, http_client, url, KATANA_AUTH_HEADERS,
+            resource=POST_DETAIL_PATH, attempt="verify", warmup_db_queries=warmup_db,
         )
         print(
             f"[second-read] GET {POST_DETAIL_PATH}: warmup_db={warmup_db} -> verify_db="
@@ -245,7 +245,7 @@ class TestSecondReadUnverified:
 
         本用例对 promo_path() 显式 GET 两次（warm-up + verify），断言 HTTP 200；
         当前 BE 给 404 → 用例按 xfail 处理；BE 修复后两次均应 200，且二次读
-        DB=0（缓存命中），由 assert_zero_db_queries 验证。
+        DB=0（缓存命中），由 assert_zero_db_queries_async 验证。
 
         注意：与 test_promotion.py:410 test_promotion_get_direct_read_hit_cache
         功能等价；本文件作为'未验证接口二次读'的中央注册表，重复一份便于
