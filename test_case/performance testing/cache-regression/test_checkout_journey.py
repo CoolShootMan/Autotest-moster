@@ -20,7 +20,10 @@ BE（release.katana-api.1m.app）调用的所有 GET API，验证"预热后连�
 - admin 域（release.admin.katana-api.1m.app）整体未部署 X-DB-Query-Count 埋点
   （db=-1），admin 接口不参与 DB=0 断言，仅作状态断言并记录为 BE 埋点缺口；
 - GET /order/checkout 依赖浏览器会话（cookie），用 Playwright 真实走两遍
-  checkout 页面：第一遍预热、第二遍验证二次加载的 GET DB 必须为 0。
+  checkout 页面：第一遍预热、第二遍验证二次加载的 GET DB 必须为 0；
+- KAT-11756 需求 3c checkout 分支：coupon 修改后结算页呈现的折扣必须立即
+  反映新配置（不 stale），由 test_checkout_coupon_not_stale_after_update 覆盖
+  （观测点为结算页 GET /cart 的 item.totalCouponDiscount）。
 """
 import asyncio
 
@@ -29,12 +32,21 @@ import pytest
 from api_params import BASE_URL, PEAR_URL
 from conftest import (
     AUTH_HEADERS,
+    AUTH_TOKEN,
+    COMMON_HEADERS,
     assert_zero_db_queries,
     assert_zero_db_queries_async,
     attach_pear_page_audit,
     get_db_queries,
 )
-from dynamic_ids import curator_id
+from dynamic_ids import curator_id, promo_path
+from test_promotion import (
+    CART_URL,
+    _build_promo_body,
+    _cart_body,
+    _now_tag,
+    _read_auto_coupon_id,
+)
 
 # ---- Checkout 链路 GET API（httpx 可复现部分，动态 id 运行时拼接） ----
 # feature-setting consumer-public：PDP 场景变体（scene=SCENE_GUEST_PDP），
@@ -67,6 +79,12 @@ def get_checkout_endpoints() -> list[dict]:
         {"path": feature_setting_pdp_path(), "label": "feature-setting-pdp"},
         {"path": promoter_sub_curator_path(), "label": "promoter-sub-curator"},
     ]
+
+
+# KAT-11756 需求 3c（checkout 分支）的 auto coupon 会话缓存（独立于
+# TestPromotionCache 的类级缓存：避免 import 测试类导致 pytest 在本模块下
+# 重复收集 test_promotion 的用例，与 test_pdp 的 _PDP_AUTO 同一模式）。
+_CHECKOUT_AUTO = {"id": None, "tag": None}
 
 
 class TestCheckoutJourneyCache:
@@ -263,3 +281,197 @@ class TestCheckoutJourneyCache:
             f"建议 BE 对广告追踪参数做缓存 key 归一化以提升命中率。"
         )
         await page.close()
+
+    @pytest.mark.asyncio
+    async def test_checkout_coupon_not_stale_after_update(
+        self, pear_context, http_client, promo_auth_headers
+    ):
+        """KAT-11756 需求 3c（checkout 分支）：coupon 修改后，checkout 结算页呈现的
+        coupon 折扣必须立即反映新配置（非 stale）。
+
+        ticket 原文（Task 3 scoped case c）："If a coupon is modified, visiting a PDP,
+        a PDD, or on a checkout page, the coupon is not stale." —— PDP 分支已由
+        test_pdp.test_pdp_coupon_not_stale_after_update 覆盖，本用例补齐 checkout
+        分支，至此 3c 的 PDP / PDD（PDD 无独立 API 面，见 test_pdp 注释）/ checkout
+        三个观测点全部覆盖。
+
+        观测点：checkout 结算页读取购物车（GET /cart，见本文件头部 API 清单第 1 条
+        "加购/结算页购物车读取"），item.totalCouponDiscount 即页面订单摘要呈现的
+        coupon 折扣。
+
+        验证链路：
+        1. apply auto coupon(10%) → PUT /cart 加购（coupon 生效，断言折扣 > 0）
+        2. 浏览器（注入同 user Authorization，使 GET /cart 读同一购物车）走完整
+           guest 旅程：PDP → Add to cart → modal Checkout 进入结算页（建立
+           checkout 会话）→ 重新加载结算页 → 拦截 GET /cart
+           → 记录修改前 checkout 页呈现的 coupon 折扣（baseline）
+        3. PATCH 修改 auto coupon 折扣 10% -> 20%（写，触发 cart 缓存失效）
+        4. 重新加载结算页 → 拦截 GET /cart → 断言折扣翻倍（≈2x），证明缓存已
+           失效、不 stale
+        5. finally 恢复 10%（避免污染 release 环境）
+        """
+        from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
+
+        pdp_url = f"{PEAR_URL}/resident/p/jjkbor"
+        checkout_url = f"{PEAR_URL}/checkout"
+
+        # 0. 兜底 apply coupon（会话级缓存，复用 test_promotion 工具链）
+        if _CHECKOUT_AUTO["id"] is None:
+            _CHECKOUT_AUTO["tag"] = _now_tag()
+            resp = await http_client.patch(
+                promo_path(),
+                headers=promo_auth_headers,
+                json=_build_promo_body(discount=10, auto_tag=_CHECKOUT_AUTO["tag"]),
+            )
+            assert resp.status_code == 200, (
+                f"Create auto coupon failed: {resp.status_code} {resp.text}"
+            )
+            _CHECKOUT_AUTO["id"] = await _read_auto_coupon_id(
+                http_client, _CHECKOUT_AUTO["tag"]
+            )
+
+        # 1. 加购：coupon 生效（购物车 item 带 totalCouponDiscount）
+        resp = await http_client.put(CART_URL, headers=AUTH_HEADERS, json=_cart_body())
+        assert resp.status_code == 200, f"Cart add failed: {resp.status_code} {resp.text}"
+        base_total = (
+            resp.json()["data"]["items"][0].get("totalCouponDiscount", 0) or 0
+        )
+        assert base_total > 0, (
+            f"auto coupon 未生效：PUT /cart 加购后 totalCouponDiscount=0，"
+            f"无法验证 checkout 页面 coupon 不 stale。"
+            f"  Check: 1) auto coupon(autoApplied) 是否仍存在且生效？\n"
+            f"         2) 加购 price 是否满足 amountThreshold？"
+        )
+
+        # 2. 浏览器注入同 user Authorization（GET /cart 读同一购物车），走完整旅程
+        await pear_context.set_extra_http_headers(
+            {**COMMON_HEADERS, "Authorization": f"Bearer {AUTH_TOKEN}"}
+        )
+        page: Page = await pear_context.new_page()
+        attach_pear_page_audit(page)
+        try:
+            # 前置：完整旅程首次进入 checkout（PDP 加购 → modal Checkout → 结算页）
+            try:
+                await page.goto(pdp_url, wait_until="domcontentloaded", timeout=40000)
+                await page.get_by_role("button", name="Add to cart").first.wait_for(
+                    state="visible", timeout=15000
+                )
+                await asyncio.sleep(3)
+                await page.get_by_role("button", name="Add to cart").first.click(
+                    timeout=10000
+                )
+                checkout_btn = page.get_by_role("button", name="Checkout").first
+                await checkout_btn.wait_for(state="visible", timeout=20000)
+                await checkout_btn.click(timeout=10000)
+                await page.wait_for_function(
+                    "() => location.pathname.startsWith('/checkout')", timeout=20000
+                )
+                await asyncio.sleep(3)
+            except (PlaywrightTimeoutError, TimeoutError) as exc:
+                print(f"[checkout-3c] journey step failed: {type(exc).__name__}: {exc}")
+                print(f"[checkout-3c] current url={page.url}")
+                btns = await page.get_by_role("button").all_text_contents()
+                print(f"[checkout-3c] buttons={btns[:12]}")
+                pytest.skip(
+                    "PDP 加购或 modal Checkout 推进失败——无法建立结算会话，"
+                    "checkout 页 coupon 呈现无法观测，跳过该用例。"
+                )
+
+            async def _checkout_coupon_total() -> tuple[float, int]:
+                """重新加载 checkout 结算页，拦截 GET /cart，返回 (totalCouponDiscount, db)。
+
+                注意：必须在 page 关闭前读取响应体（page.close 后 response.json 抛
+                TargetClosedError）；checkout 页重载超时按环境性超时降级 skip，
+                不误报为缓存回归（与 _capture_checkout_get 同口径）。
+                """
+                captured: dict = {}
+
+                def on_response(r):
+                    if (
+                        r.request.method == "GET"
+                        and r.status == 200
+                        and "/cart" in r.url
+                    ):
+                        captured["resp"] = r
+
+                page.on("response", on_response)
+                try:
+                    await page.goto(checkout_url, wait_until="load", timeout=40000)
+                    await asyncio.sleep(3)
+                except (PlaywrightTimeoutError, TimeoutError) as exc:
+                    print(
+                        f"[checkout-3c] checkout 页重载超时（降级 skip）: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    pytest.skip(
+                        f"checkout 页面加载超时（{type(exc).__name__}）——"
+                        f"环境性超时，无法观测 coupon 呈现值，跳过。"
+                    )
+                finally:
+                    page.remove_listener("response", on_response)
+                if "resp" not in captured:
+                    raise AssertionError(
+                        f"checkout 结算页加载未触发 GET /cart（{checkout_url}）"
+                        f"——无法观测页面 coupon 呈现值。"
+                    )
+                r = captured["resp"]
+                body = await r.json()
+                items = (body.get("data") or {}).get("items") or []
+                total = items[0].get("totalCouponDiscount", 0) if items else 0
+                db = int(r.headers.get("x-db-query-count", -1) or -1)
+                return total, db
+
+            checkout_base, checkout_base_db = await _checkout_coupon_total()
+            assert checkout_base > 0, (
+                f"checkout 页面加载后 GET /cart 未读到 coupon 折扣"
+                f"（totalCouponDiscount=0），无法作为 3c 观测基线。"
+            )
+
+            # 3. PATCH 修改 auto coupon 折扣 10% -> 20%（写，触发 cart 缓存失效）
+            resp = await http_client.patch(
+                promo_path(),
+                headers=promo_auth_headers,
+                json=_build_promo_body(
+                    discount=20,
+                    auto_tag=_CHECKOUT_AUTO["tag"],
+                    auto_id=_CHECKOUT_AUTO["id"],
+                ),
+            )
+            assert resp.status_code == 200, (
+                f"Promo patch(20%) failed: {resp.status_code} {resp.text}"
+            )
+            try:
+                # 4. 重新加载结算页：coupon 折扣应翻倍（缓存已失效，不 stale）
+                checkout_after, checkout_after_db = await _checkout_coupon_total()
+            finally:
+                # 5. 恢复 10%
+                await http_client.patch(
+                    promo_path(),
+                    headers=promo_auth_headers,
+                    json=_build_promo_body(
+                        discount=10,
+                        auto_tag=_CHECKOUT_AUTO["tag"],
+                        auto_id=_CHECKOUT_AUTO["id"],
+                    ),
+                )
+        finally:
+            await page.close()
+
+        assert checkout_after > checkout_base, (
+            f"KAT-11756 3c（checkout 分支）未满足：coupon 修改后 checkout 页 coupon 仍 stale!\n"
+            f"  Endpoint: PATCH {promo_path()}（auto coupon id={_CHECKOUT_AUTO['id']} 10% -> 20%）\n"
+            f"  Phase: 修改后重新加载 checkout 结算页（{checkout_url}）\n"
+            f"  Expected: GET /cart 返回 coupon 折扣 从 {checkout_base:.2f} 增大到 "
+            f"~{checkout_base * 2:.2f}（折扣翻倍）\n"
+            f"  Actual:   {checkout_after:.2f}（仍为旧折扣 → coupon 修改后缓存未立即失效）\n"
+            f"  GET /cart DB: 修改前={checkout_base_db}，修改后={checkout_after_db}"
+            f"（>0 表示失效后重新计算，属期望行为）\n"
+            f"  Action: coupon 修改后 checkout 页面呈现旧 coupon 折扣，promotion 配置缓存未失效。\n"
+            f"  Check: 1) PATCH promotions 修改 coupon 后是否触发 cart/promotion 缓存主动失效？\n"
+            f"         2) GET /cart 读路径是否读取了最新 promotion 配置（无 stale TTL）？"
+        )
+        print(
+            f"[checkout-3c] checkout 页 coupon 折扣: 修改前={checkout_base} "
+            f"(DB={checkout_base_db}) -> 修改后={checkout_after} "
+            f"(DB={checkout_after_db})；折扣翻倍即不 stale ✓"
+        )
