@@ -93,7 +93,7 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
-          import os, re, glob
+          import os, re, glob, json
           import xml.etree.ElementTree as ET
 
           # pytest 统计（junitxml 最稳，文本日志格式易变）
@@ -122,7 +122,8 @@ jobs:
                           failed_cases.append(m.group(1))
 
           # 审计报告亮点（违规接口数 / BE 已知缺口数 / 未验证数）
-          violations, be_gaps, unverified = '?', '?', '?'
+          # 未验证：conftest 在无未验证接口时不再输出统计行与章节 → 解析不到视为 0
+          violations, be_gaps, unverified = '?', '?', '0'
           reports = sorted(glob.glob('output/get_api_db_audit_*.md'), reverse=True)
           report_name = os.path.basename(reports[0]) if reports else ''
           violations_list = be_gaps_list = unverified_list = report_full = '无'
@@ -165,7 +166,7 @@ jobs:
                   f'• `{_short(r[1])}`\n  {r[2][:180]}' for r in vrows[:8]
               ) if vrows else '无'
 
-              # 未验证接口列表
+              # 未验证接口列表（章节无则列表为空）
               urows = _rows('## 未验证接口')
               unverified_list = '\n'.join(
                   f'• `{_short(r[1])}`（{r[2]}次，{r[3]}）' for r in urows[:5]
@@ -181,7 +182,7 @@ jobs:
               report_full = text[:20000]
 
           def _safe(s):
-              """转义为可安全嵌入 JSON payload 的单行字符串（换行→\\n，引号→\\"）。"""
+              """转义为可安全写入 GITHUB_OUTPUT 的单行字符串（换行→\\n，引号→\\"）。"""
               return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
 
           with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
@@ -198,6 +199,72 @@ jobs:
               f.write(f"unverified_list={_safe(unverified_list)}\n")
               f.write(f"be_gaps_list={_safe(be_gaps_list)}\n")
               f.write(f"report_full={_safe(report_full)}\n")
+
+          # ---- 构建 Slack payload（未验证接口为 0 时不出现任何"未验证"内容）----
+          ref_name  = os.environ.get('GITHUB_REF_NAME', '')
+          run_id    = os.environ.get('GITHUB_RUN_ID', '')
+          server    = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
+          repo      = os.environ.get('GITHUB_REPOSITORY', '')
+          run_url   = f"{server}/{repo}/actions/runs/{run_id}"
+          failed_txt = chr(10).join(failed_cases[:10]) if failed_cases else '无'
+
+          def _header(t):
+              return {"type": "header", "text": {"type": "plain_text", "text": t}}
+
+          def _mrk(t):
+              return {"type": "section", "text": {"type": "mrkdwn", "text": t}}
+
+          def _fields(items):
+              return {"type": "section", "fields": [{"type": "mrkdwn", "text": t} for t in items]}
+
+          def _button():
+              return {"type": "actions", "elements": [
+                  {"type": "button", "text": {"type": "plain_text", "text": "查看 Run 详情"}, "url": run_url}]}
+
+          full_text = (
+              "📋 *cache-regression-daily 完整审计报告*"
+              f"（分支 `{ref_name}`，run {run_id}）\n{report_full}"
+          )
+
+          def _build(success):
+              if success:
+                  blocks = [
+                      _header("✅ cache-regression-daily 通过"),
+                      _fields([
+                          f"*分支*: `{ref_name}`",
+                          f"*通过*: {passed}  *跳过*: {skipped}",
+                          f"*违规接口*: {violations}",
+                          f"*BE 缺口*: {be_gaps}",
+                      ]),
+                  ]
+                  v_text = "无，全部 GET 均 0 DB 缓存命中" if violations == '0' else violations_list
+                  blocks.append(_mrk(f"*违规接口（预热后仍读 DB）*:\n{v_text}"))
+              else:
+                  blocks = [
+                      _header("❌ cache-regression-daily 失败"),
+                      _fields([
+                          f"*分支*: `{ref_name}`",
+                          f"*失败*: {failures}  *错误*: {errors}",
+                          f"*违规接口*: {violations}",
+                          f"*BE 缺口*: {be_gaps}",
+                      ]),
+                      _mrk(f"*失败用例*:\n{failed_txt}"),
+                  ]
+                  v_text = "无" if violations == '0' else violations_list
+                  blocks.append(_mrk(f"*违规接口（预热后仍读 DB）*:\n{v_text}"))
+              # 未验证接口：仅当存在（>0）时展示，无则不写
+              if str(unverified) != '0':
+                  blocks.append(_mrk(f"*未验证接口*:\n{unverified_list}"))
+              blocks.append(_mrk(f"*BE 已知缺口（后端需修复）*:\n{be_gaps_list}"))
+              blocks.append(_mrk(
+                  f"*审计报告*: `{report_name}`\n完整报告已内嵌本条消息（展开查看），无需 GitHub 权限。"))
+              blocks.append(_button())
+              return {"text": full_text, "blocks": blocks}
+
+          for fname, ok in (("slack_payload_success.json", True), ("slack_payload_failure.json", False)):
+              with open(fname, "w", encoding="utf-8") as f:
+                  json.dump(_build(ok), f, ensure_ascii=False)
+              print(f"[summarize] wrote {fname}")
           PY
 
       - name: Send Slack notification (success)
@@ -208,51 +275,7 @@ jobs:
         with:
           webhook: ${{ env.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": "📋 *cache-regression-daily 完整审计报告*（分支 `${{ github.ref_name }}`，run ${{ github.run_id }}）\n${{ steps.summarize.outputs.report_full }}",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": { "type": "plain_text", "text": "✅ cache-regression-daily 通过" }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    { "type": "mrkdwn", "text": "*分支*: `${{ github.ref_name }}`" },
-                    { "type": "mrkdwn", "text": "*通过*: ${{ steps.summarize.outputs.passed }}  *跳过*: ${{ steps.summarize.outputs.skipped }}" },
-                    { "type": "mrkdwn", "text": "*违规接口*: ${{ steps.summarize.outputs.violations }}" },
-                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}  *未验证*: ${{ steps.summarize.outputs.unverified }}" }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*违规接口（预热后仍读 DB）*:\n${{ steps.summarize.outputs.violations != '0' && steps.summarize.outputs.violations_list || '无，全部 GET 均 0 DB 缓存命中' }}" }
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*未验证接口*:\n${{ steps.summarize.outputs.unverified != '0' && steps.summarize.outputs.unverified_list || '无' }}" }
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*BE 已知缺口（后端需修复）*:\n${{ steps.summarize.outputs.be_gaps_list }}" }
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*审计报告*: `${{ steps.summarize.outputs.report_name }}`\n完整报告已内嵌本条消息（展开查看），无需 GitHub 权限。" }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": { "type": "plain_text", "text": "查看 Run 详情" },
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
-                }
-              ]
-            }
+          payload-file-path: test_case/performance testing/cache-regression/slack_payload_success.json
 
       - name: Send Slack notification (failure)
         if: ${{ always() && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
@@ -262,48 +285,4 @@ jobs:
         with:
           webhook: ${{ env.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": "📋 *cache-regression-daily 完整审计报告*（分支 `${{ github.ref_name }}`，run ${{ github.run_id }}）\n${{ steps.summarize.outputs.report_full }}",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": { "type": "plain_text", "text": "❌ cache-regression-daily 失败" }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    { "type": "mrkdwn", "text": "*分支*: `${{ github.ref_name }}`" },
-                    { "type": "mrkdwn", "text": "*失败*: ${{ steps.summarize.outputs.failed }}  *错误*: ${{ steps.summarize.outputs.errors }}" },
-                    { "type": "mrkdwn", "text": "*违规接口*: ${{ steps.summarize.outputs.violations }}" },
-                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}  *未验证*: ${{ steps.summarize.outputs.unverified }}" }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*失败用例*:\n${{ steps.summarize.outputs.failed_cases }}" }
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*违规接口（预热后仍读 DB）*:\n${{ steps.summarize.outputs.violations != '0' && steps.summarize.outputs.violations_list || '无' }}" }
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*BE 已知缺口（后端需修复）*:\n${{ steps.summarize.outputs.be_gaps_list }}" }
-                },
-                {
-                  "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*审计报告*: `${{ steps.summarize.outputs.report_name }}`\n完整报告已内嵌本条消息（展开查看），无需 GitHub 权限。" }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": { "type": "plain_text", "text": "查看 Run 详情" },
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
-                }
-              ]
-            }
+          payload-file-path: test_case/performance testing/cache-regression/slack_payload_failure.json
