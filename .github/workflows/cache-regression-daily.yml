@@ -45,8 +45,12 @@ jobs:
           sed 's/=.*/=<redacted>/' .env.release
 
       - name: Run cache-regression tests
+        id: run_tests
         working-directory: test_case/performance testing/cache-regression
-        run: pytest -v
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -v --tb=short --junitxml=pytest_report.xml 2>&1 | tee pytest_run.log
 
       - name: Print audit report to job summary
         if: always()
@@ -77,6 +81,145 @@ jobs:
           name: cache-regression-output
           path: test_case/performance testing/cache-regression/output
 
-      # 失败通知：方案 B，走 GitHub 原生通知（无 SMTP）。
-      # 需将该 GitHub 账号的通知邮箱设为 linda.zhou.ext@1m.app 并开启 Actions 通知，
-      # workflow run 失败时 GitHub 会自动发邮件，无需额外配置。
+      # ===== Slack 通知（Incoming Webhook）=====
+      # 需在仓库 Secrets 配置 SLACK_WEBHOOK_URL（Slack App -> Incoming Webhooks 生成）。
+      # 未配置时以下步骤自动跳过，不影响测试本身。
+      # 结果：成功只发摘要（含违规接口/BE 缺口数 + run 链接）；
+      #       失败发失败用例列表 + run 链接，开发可直接点进详情定位。
+      - name: Summarize results for Slack
+        id: summarize
+        if: always()
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re, glob
+          import xml.etree.ElementTree as ET
+
+          # pytest 统计（junitxml 最稳，文本日志格式易变）
+          suite = None
+          if os.path.exists('pytest_report.xml'):
+              try:
+                  suite = ET.parse('pytest_report.xml').getroot()
+              except ET.ParseError:
+                  suite = None
+          if suite is not None:
+              tests    = int(suite.get('tests', '0'))
+              failures = int(suite.get('failures', '0'))
+              errors   = int(suite.get('errors', '0'))
+              skipped  = int(suite.get('skipped', '0'))
+              passed   = tests - failures - errors - skipped
+          else:
+              tests = failures = errors = skipped = passed = 0
+
+          # 失败用例（从 pytest 日志提取 FAILED 行，最多 10 条）
+          failed_cases = []
+          if os.path.exists('pytest_run.log'):
+              with open('pytest_run.log', encoding='utf-8', errors='replace') as f:
+                  for line in f:
+                      m = re.match(r'FAILED\s+(\S+)', line)
+                      if m:
+                          failed_cases.append(m.group(1))
+
+          # 审计报告亮点（违规接口数 / BE 已知缺口数）
+          violations, be_gaps = '?', '?'
+          reports = sorted(glob.glob('output/get_api_db_audit_*.md'), reverse=True)
+          report_name = os.path.basename(reports[0]) if reports else ''
+          if reports:
+              with open(reports[0], encoding='utf-8', errors='replace') as f:
+                  text = f.read()
+              m = re.search(r'违规接口数（预热后仍读 DB）：(\d+)', text)
+              if m:
+                  violations = m.group(1)
+              m = re.search(r'BE 已知缺口（已确认后端问题，见专章）：(\d+)', text)
+              if m:
+                  be_gaps = m.group(1)
+
+          with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
+              f.write(f"passed={passed}\n")
+              f.write(f"failed={failures}\n")
+              f.write(f"errors={errors}\n")
+              f.write(f"skipped={skipped}\n")
+              f.write(f"failed_cases={' | '.join(failed_cases[:10]) if failed_cases else '无'}\n")
+              f.write(f"report_name={report_name or '未生成'}\n")
+              f.write(f"violations={violations}\n")
+              f.write(f"be_gaps={be_gaps}\n")
+          PY
+
+      - name: Send Slack notification (success)
+        if: ${{ always() && secrets.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome == 'success' }}
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": { "type": "plain_text", "text": "✅ cache-regression-daily 通过" }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*分支*: `${{ github.ref_name }}`" },
+                    { "type": "mrkdwn", "text": "*通过*: ${{ steps.summarize.outputs.passed }}  *跳过*: ${{ steps.summarize.outputs.skipped }}" },
+                    { "type": "mrkdwn", "text": "*违规接口*: ${{ steps.summarize.outputs.violations }}" },
+                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}" }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*审计报告*: `${{ steps.summarize.outputs.report_name }}`（详细数据见 Run 页面 Job Summary）" }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "查看 Run 详情" },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Send Slack notification (failure)
+        if: ${{ always() && secrets.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": { "type": "plain_text", "text": "❌ cache-regression-daily 失败" }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*分支*: `${{ github.ref_name }}`" },
+                    { "type": "mrkdwn", "text": "*失败*: ${{ steps.summarize.outputs.failed }}  *错误*: ${{ steps.summarize.outputs.errors }}" },
+                    { "type": "mrkdwn", "text": "*违规接口*: ${{ steps.summarize.outputs.violations }}" },
+                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}" }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*失败用例*:\n${{ steps.summarize.outputs.failed_cases }}" }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "查看 Run 详情" },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
