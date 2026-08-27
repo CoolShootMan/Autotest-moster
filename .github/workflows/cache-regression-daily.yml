@@ -121,29 +121,83 @@ jobs:
                       if m:
                           failed_cases.append(m.group(1))
 
-          # 审计报告亮点（违规接口数 / BE 已知缺口数）
-          violations, be_gaps = '?', '?'
+          # 审计报告亮点（违规接口数 / BE 已知缺口数 / 未验证数）
+          violations, be_gaps, unverified = '?', '?', '?'
           reports = sorted(glob.glob('output/get_api_db_audit_*.md'), reverse=True)
           report_name = os.path.basename(reports[0]) if reports else ''
+          violations_list = be_gaps_list = unverified_list = report_full = '无'
           if reports:
               with open(reports[0], encoding='utf-8', errors='replace') as f:
                   text = f.read()
               m = re.search(r'违规接口数（预热后仍读 DB）：(\d+)', text)
               if m:
                   violations = m.group(1)
+              m = re.search(r'未验证接口数（无实例二次读取样本）：(\d+)', text)
+              if m:
+                  unverified = m.group(1)
               m = re.search(r'BE 已知缺口（已确认后端问题，见专章）：(\d+)', text)
               if m:
                   be_gaps = m.group(1)
+
+              def _rows(header):
+                  """提取某 markdown 章节的表格数据行（返回 cell 列表）。"""
+                  lines = text.splitlines()
+                  start = next((i for i, ln in enumerate(lines) if ln.startswith(header)), None)
+                  if start is None:
+                      return []
+                  rows = []
+                  for ln in lines[start + 1:]:
+                      if ln.startswith('## '):
+                          break
+                      if ln.startswith('|') and '---' not in ln:
+                          cells = [c.strip() for c in ln.strip().strip('|').split('|')]
+                          if cells and cells[0].isdigit():
+                              rows.append(cells)
+                  return rows
+
+              def _short(u, limit=90):
+                  u = u.replace('https://', '').replace('http://', '')
+                  return u if len(u) <= limit else u[:limit] + '…'
+
+              # 违规接口列表（URL 缩略 + 请求顺序→DB 摘要）
+              vrows = _rows('## 违规接口')
+              violations_list = '\n'.join(
+                  f'• `{_short(r[1])}`\n  {r[2][:180]}' for r in vrows[:8]
+              ) if vrows else '无'
+
+              # 未验证接口列表
+              urows = _rows('## 未验证接口')
+              unverified_list = '\n'.join(
+                  f'• `{_short(r[1])}`（{r[2]}次，{r[3]}）' for r in urows[:5]
+              ) if urows else '无'
+
+              # BE 已知缺口列表
+              grows = _rows('## BE 已知缺口')
+              be_gaps_list = '\n'.join(
+                  f'• `{r[1][:80]}`：{r[2][:110]}' for r in grows[:5]
+              ) if grows else '无'
+
+              # 完整报告（内嵌 Slack 消息，无 GitHub 权限的开发也可读全文）
+              report_full = text[:20000]
+
+          def _safe(s):
+              """转义为可安全嵌入 JSON payload 的单行字符串（换行→\\n，引号→\\"）。"""
+              return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
 
           with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
               f.write(f"passed={passed}\n")
               f.write(f"failed={failures}\n")
               f.write(f"errors={errors}\n")
               f.write(f"skipped={skipped}\n")
-              f.write(f"failed_cases={' | '.join(failed_cases[:10]) if failed_cases else '无'}\n")
+              f.write(f"failed_cases={_safe(chr(10).join(failed_cases[:10]) if failed_cases else '无')}\n")
               f.write(f"report_name={report_name or '未生成'}\n")
               f.write(f"violations={violations}\n")
               f.write(f"be_gaps={be_gaps}\n")
+              f.write(f"unverified={unverified}\n")
+              f.write(f"violations_list={_safe(violations_list)}\n")
+              f.write(f"unverified_list={_safe(unverified_list)}\n")
+              f.write(f"be_gaps_list={_safe(be_gaps_list)}\n")
+              f.write(f"report_full={_safe(report_full)}\n")
           PY
 
       - name: Send Slack notification (success)
@@ -156,6 +210,7 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
+              "text": "📋 *cache-regression-daily 完整审计报告*（分支 `${{ github.ref_name }}`，run ${{ github.run_id }}）\n${{ steps.summarize.outputs.report_full }}",
               "blocks": [
                 {
                   "type": "header",
@@ -167,12 +222,24 @@ jobs:
                     { "type": "mrkdwn", "text": "*分支*: `${{ github.ref_name }}`" },
                     { "type": "mrkdwn", "text": "*通过*: ${{ steps.summarize.outputs.passed }}  *跳过*: ${{ steps.summarize.outputs.skipped }}" },
                     { "type": "mrkdwn", "text": "*违规接口*: ${{ steps.summarize.outputs.violations }}" },
-                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}" }
+                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}  *未验证*: ${{ steps.summarize.outputs.unverified }}" }
                   ]
                 },
                 {
                   "type": "section",
-                  "text": { "type": "mrkdwn", "text": "*审计报告*: `${{ steps.summarize.outputs.report_name }}`（详细数据见 Run 页面 Job Summary）" }
+                  "text": { "type": "mrkdwn", "text": "*违规接口（预热后仍读 DB）*:\n${{ steps.summarize.outputs.violations != '0' && steps.summarize.outputs.violations_list || '无，全部 GET 均 0 DB 缓存命中' }}" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*未验证接口*:\n${{ steps.summarize.outputs.unverified != '0' && steps.summarize.outputs.unverified_list || '无' }}" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*BE 已知缺口（后端需修复）*:\n${{ steps.summarize.outputs.be_gaps_list }}" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*审计报告*: `${{ steps.summarize.outputs.report_name }}`\n完整报告已内嵌本条消息（展开查看），无需 GitHub 权限。" }
                 },
                 {
                   "type": "actions",
@@ -197,6 +264,7 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
+              "text": "📋 *cache-regression-daily 完整审计报告*（分支 `${{ github.ref_name }}`，run ${{ github.run_id }}）\n${{ steps.summarize.outputs.report_full }}",
               "blocks": [
                 {
                   "type": "header",
@@ -208,12 +276,24 @@ jobs:
                     { "type": "mrkdwn", "text": "*分支*: `${{ github.ref_name }}`" },
                     { "type": "mrkdwn", "text": "*失败*: ${{ steps.summarize.outputs.failed }}  *错误*: ${{ steps.summarize.outputs.errors }}" },
                     { "type": "mrkdwn", "text": "*违规接口*: ${{ steps.summarize.outputs.violations }}" },
-                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}" }
+                    { "type": "mrkdwn", "text": "*BE 缺口*: ${{ steps.summarize.outputs.be_gaps }}  *未验证*: ${{ steps.summarize.outputs.unverified }}" }
                   ]
                 },
                 {
                   "type": "section",
                   "text": { "type": "mrkdwn", "text": "*失败用例*:\n${{ steps.summarize.outputs.failed_cases }}" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*违规接口（预热后仍读 DB）*:\n${{ steps.summarize.outputs.violations != '0' && steps.summarize.outputs.violations_list || '无' }}" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*BE 已知缺口（后端需修复）*:\n${{ steps.summarize.outputs.be_gaps_list }}" }
+                },
+                {
+                  "type": "section",
+                  "text": { "type": "mrkdwn", "text": "*审计报告*: `${{ steps.summarize.outputs.report_name }}`\n完整报告已内嵌本条消息（展开查看），无需 GitHub 权限。" }
                 },
                 {
                   "type": "actions",
