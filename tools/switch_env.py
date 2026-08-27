@@ -188,6 +188,25 @@ def switch_env(target_env, dry_run=False, verbose=False):
     return True
 
 
+def list_envs(cfg):
+    """List all available environments and mark the current one"""
+    envs = cfg.get("envs", {})
+    current_env = cfg.get("current_env", "release")
+    print(f"{'='*60}")
+    print("Available environments:")
+    for name, info in envs.items():
+        if not isinstance(info, dict):
+            print(f"  {name:<10}")
+            continue
+        marker = "  (current)" if name == current_env else ""
+        desc = info.get("desc", "")
+        base = info.get("base", "")
+        print(f"  {name:<10}{desc}{marker}")
+        if base:
+            print(f"             base: {base}")
+    print(f"{'='*60}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="One-command test environment URL switcher",
