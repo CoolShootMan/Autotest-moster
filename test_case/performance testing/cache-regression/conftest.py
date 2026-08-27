@@ -754,6 +754,7 @@ def _write_get_db_audit_report() -> str:
 
     violations = []
     unverified = []
+    be_attributed = []  # 命中 BE 已知缺口的"未验证"接口（归因到 BE 缺口章节）
     passed = []
     details = []
     for url, entries in grouped.items():
@@ -801,9 +802,21 @@ def _write_get_db_audit_report() -> str:
                 if inst_leaked:
                     violations.append((inst_url, inst_db, inst_status))
         elif not has_second_sample:
-            # 无任何实例有二次读取样本：无法验证预热后是否命中缓存
-            status_mark = "未验证(无实例二次读取样本)"
-            unverified.append((url, len(entries), dist, status_mark))
+            # 无任何实例有二次读取样本：无法验证预热后是否命中缓存。
+            # 若该接口模式命中 BE 已知缺口（checkout fbAdParams 未归一化 /
+            # admin 无埋点 / curator GET 路由缺失），其"无二次样本"由 BE 缺陷
+            # 导致且已有 @xfail 用例覆盖——归因到 BE 缺口章节，不在此重复罗列，
+            # 避免"未验证"章节反复冒出已知缺陷项。
+            gap_hit = next(
+                (g for g in _KNOWN_BE_GAPS if any(g["match"](e["url"]) for e in entries)),
+                None,
+            )
+            if gap_hit is not None:
+                status_mark = f"归因BE缺口({gap_hit['id']})"
+                be_attributed.append((url, len(entries), dist, status_mark, gap_hit["id"]))
+            else:
+                status_mark = "未验证(无实例二次读取样本)"
+                unverified.append((url, len(entries), dist, status_mark))
         else:
             status_mark = "通过(预热后DB=0)"
             passed.append((url, len(entries), dist, status_mark))
@@ -833,6 +846,15 @@ def _write_get_db_audit_report() -> str:
 
     lines.append("## 未验证接口（无实例二次读取样本，大流量前建议补二次读取验证）")
     lines.append("")
+    if be_attributed:
+        gap_ids = sorted({gid for _, _, _, _, gid in be_attributed})
+        lines.append(
+            f"- 另有 {len(be_attributed)} 个接口命中 BE 已知缺口"
+            f"（{'、'.join(gap_ids)}）：其'无二次读取样本'由后端缺陷导致"
+            f"（checkout 广告参数未归一化 / admin 域无 DB 埋点 / GET 路由缺失），"
+            f"已由对应 @xfail 用例覆盖并在下方'BE 已知缺口'章节说明，此处不重复罗列。"
+        )
+        lines.append("")
     lines.append("| # | GET URL | 请求次数 | DB 分布 |")
     lines.append("|---|---------|---------|---------|")
     for idx, (url, count, dist, _) in enumerate(unverified, 1):
