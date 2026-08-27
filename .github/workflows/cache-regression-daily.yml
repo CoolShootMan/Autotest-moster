@@ -147,10 +147,12 @@ jobs:
           PY
 
       - name: Send Slack notification (success)
-        if: ${{ always() && secrets.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome == 'success' }}
+        if: ${{ always() && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome == 'success' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         uses: slackapi/slack-github-action@v2
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
@@ -186,10 +188,12 @@ jobs:
             }
 
       - name: Send Slack notification (failure)
-        if: ${{ always() && secrets.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
+        if: ${{ always() && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         uses: slackapi/slack-github-action@v2
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
