@@ -266,16 +266,26 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
 
     if preprime:
         # 裸加载：触发页面全部 XHR（含懒加载）冷读并填充缓存；不计审计、不计数。
-        # 用 domcontentloaded + 等首个业务 XHR，避免 networkidle 早于 JS 执行导致冷读没发生。
+        # 用 domcontentloaded + expect_response 在 goto 前注册等首个业务 XHR，确保
+        # goto 期间已发出的业务响应不遗漏（wait_for_response 是调用后才开始监听）。
         _page: Page = await context.new_page()
-        await _page.goto(f"{PEAR_URL}{path}", wait_until="domcontentloaded", timeout=30000)
         try:
-            await _page.wait_for_response(
+            async with _page.expect_response(
                 lambda r: r.request.method == "GET" and "katana-api" in r.url,
-                timeout=20000,
-            )
+                timeout=30000,
+            ):
+                await _page.goto(
+                    f"{PEAR_URL}{path}", wait_until="domcontentloaded", timeout=30000
+                )
         except Exception:
-            pass
+            # 首个业务 XHR 超时未等到：页面已完成 domcontentloaded，多数冷读已在 goto
+            # 期间完成；显式再走一次 goto 兜底，确保页面加载完成。
+            try:
+                await _page.goto(
+                    f"{PEAR_URL}{path}", wait_until="domcontentloaded", timeout=30000
+                )
+            except Exception:
+                pass
         await asyncio.sleep(2)
         await _page.close()
 
@@ -329,14 +339,23 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
             wait_until="domcontentloaded",
             timeout=30000,
         )
-        # 等待业务 XHR 静默：轮询直到 1.5s 内无新业务 GET 响应（_db_gets+_skipped_gap
-        # 数量不再增长）或 20s 超时。相比固定 sleep，能覆盖懒加载 XHR 晚于 networkidle
-        # 发起的情况；同时保持对 TTL(~10-15s) 的敏感性——静默后即关闭窗口，不拖长验证间隔。
-        _deadline = _time.monotonic() + 20
-        _prev_biz = len(_db_gets) + len(_skipped_gap)
+        # ---- 两阶段统计窗口（消除残留时序 flaky，2026-08-27）----
+        # 阶段1：等页面发起至少一个业务 GET（katana-api 域），最长 30s。旧实现
+        #        "1.5s 无新增即静默"会在页面 JS 尚未执行到数据请求阶段时就误判静默、
+        #        提前截断窗口（CI #25 捕获 171 条全静态、0 业务 XHR 即此），阶段1 确保
+        #        JS 真正进入请求阶段后窗口才开放。
+        _dl1 = _time.monotonic() + 30
+        while _time.monotonic() < _dl1:
+            if any("katana-api" in u for u in _all_gets):
+                break
+            await asyncio.sleep(0.5)
+        # 阶段2：业务 XHR 出现后等其静默（1.5s 无新业务 GET，最多 15s），覆盖懒加载
+        #        多请求；静默后即关闭窗口，不拖长验证间隔，保持对 TTL(~10-15s) 的敏感。
+        _dl2 = _time.monotonic() + 15
+        _prev_biz = sum(1 for u in _all_gets if "katana-api" in u)
         _last_changed = _time.monotonic()
-        while _time.monotonic() < _deadline:
-            _cur_biz = len(_db_gets) + len(_skipped_gap)
+        while _time.monotonic() < _dl2:
+            _cur_biz = sum(1 for u in _all_gets if "katana-api" in u)
             if _cur_biz > _prev_biz:
                 _prev_biz = _cur_biz
                 _last_changed = _time.monotonic()
