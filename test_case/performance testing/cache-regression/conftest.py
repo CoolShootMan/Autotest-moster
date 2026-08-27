@@ -3,6 +3,12 @@ cache-regression 测试套件公共配置与 Fixture。
 
 依赖后端在每个 API 响应的 Header 中注入 X-DB-Query-Count，
 表示本次请求产生的数据库查询次数。缓存命中的请求该值必须为 0。
+
+审计范围（2026-08-27 经 June Teng 确认）：
+- 仅针对 C 端业务接口（katana-api 域 storefront 真实读写路径）；
+- admin 域（admin.katana-api.1m.app）不参与审计：
+  admin 后台不要求加缓存，且 admin GET 接口无 X-DB-Query-Count 埋点，
+  无 0-DB 违规判定的数据基础。所有 admin 请求在审计入口统一过滤。
 """
 import base64
 import collections
@@ -17,6 +23,14 @@ from datetime import datetime
 import pytest
 import httpx
 from dotenv import load_dotenv
+
+# admin 域 host token：admin 后台 API 域名子串（覆盖 release.admin.* 与 admin.*）
+_ADMIN_HOST_TOKEN = "admin.katana-api.1m.app"
+
+
+def _is_admin_request(url: str) -> bool:
+    """请求 URL 是否属于 admin 域（审计范围外）。"""
+    return _ADMIN_HOST_TOKEN in url
 
 # 按 API_ENV（release|prod，默认 release）加载对应环境文件 .env.{API_ENV}，
 # 不存在时回退本目录 .env：admin 凭据与动态 token 由 precondition_login.py 维护，
@@ -213,6 +227,9 @@ def attach_pear_page_audit(page) -> None:
     console 抓取只负责提取该页面的代表值。
     """
     def _on_page_response(response):
+        # admin 域不在审计范围（admin 不加缓存），提前返回避免噪音进 REQUEST_LOG
+        if _is_admin_request(response.url):
+            return
         db_raw = response.headers.get("x-db-query-count")
         if db_raw is None:
             return
@@ -305,6 +322,9 @@ async def navigate_pear_page(context, path: str, preprime: bool = False) -> tupl
     _SSR_EXCLUDE = ("store-front/shop/resident", "/cart", "/posts/consumer/detail")
 
     def _on_response(r):
+        # admin 域不在审计范围（admin 不加缓存），不进入页面 DB 统计
+        if _is_admin_request(r.url):
+            return
         if r.request.method == "GET":
             _all_gets.append(f"{r.status} {r.url[:110]}")
         if r.request.method != "GET" or not (200 <= r.status < 300):
@@ -696,21 +716,6 @@ _KNOWN_BE_GAPS = [
         "fix": "BE 实现 GET /posts/curator/{postId}/promotions 读路由并部署 DB 计数埋点",
         "status": "open",
     },
-    {
-        "id": "BE-GAP-003",
-        "pattern": "admin 域（release.admin.katana-api.1m.app）",
-        "match": lambda url: "admin.katana-api.1m.app" in url,
-        "issue": (
-            "admin 域整体未部署 X-DB-Query-Count 埋点（db=-1），admin 侧 GET "
-            "无法纳入 0-DB 违规判定，admin 接口是否读 DB 处于盲区"
-        ),
-        "evidence": (
-            "test_second_read.py::test_admin_promotions_second_read_status_ok "
-            "（仅断言 HTTP 200，无法做 DB=0 断言）"
-        ),
-        "fix": "BE 在 admin 域网关/中间件统一注入 X-DB-Query-Count 响应头",
-        "status": "open",
-    },
 ]
 
 
@@ -726,22 +731,33 @@ def _write_get_db_audit_report() -> str:
     - 接口模式内无任何实例有二次读取样本 → 标记"未验证"，不判通过也不判违规；
     - 非 2xx 响应的 DB 计数不可信，不参与违规判定；
     - 请求来源含 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类
-      （source ∈ {httpx, playwright}），全部纳入统计，不再有审计盲区。
+      （source ∈ {httpx, playwright}），全部纳入统计，不再有审计盲区；
+    - admin 域（admin.katana-api.1m.app）请求在审计入口统一过滤，不参与
+      违规/未验证/写接口统计（June Teng 2026-08-27：admin 不加缓存，仅 C 端接口需审计）。
     """
     now = datetime.now()
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
     os.makedirs(output_dir, exist_ok=True)
     report_path = os.path.join(output_dir, f"get_api_db_audit_{now:%Y%m%d_%H%M%S}.md")
 
+    # 审计范围过滤：admin 域请求不纳入审计（admin 不加缓存）
+    audited_log = [e for e in REQUEST_LOG if not _is_admin_request(e["url"])]
+    admin_entries = [e for e in REQUEST_LOG if _is_admin_request(e["url"])]
+    if admin_entries:
+        print(
+            f"[audit] admin 域请求 {len(admin_entries)} 条已从审计中过滤"
+            f"（admin 不加缓存，仅 C 端接口参与审计）"
+        )
+
     # 筛选：GET 业务请求（探测请求本就经独立 httpx 发出、不进日志，无需再过滤）
-    get_entries = [e for e in REQUEST_LOG if e["method"] == "GET"]
+    get_entries = [e for e in audited_log if e["method"] == "GET"]
 
     # 按归一化 URL 分组（保持首次出现顺序）
     grouped = OrderedDict()
     for e in get_entries:
         grouped.setdefault(_normalize_url(e["url"]), []).append(e)
 
-    source_counter = collections.Counter(e["source"] for e in REQUEST_LOG)
+    source_counter = collections.Counter(e["source"] for e in audited_log)
 
     lines = []
     lines.append("# GET API DB 读取审计报告")
@@ -804,9 +820,9 @@ def _write_get_db_audit_report() -> str:
         elif not has_second_sample:
             # 无任何实例有二次读取样本：无法验证预热后是否命中缓存。
             # 若该接口模式命中 BE 已知缺口（checkout fbAdParams 未归一化 /
-            # admin 无埋点 / curator GET 路由缺失），其"无二次样本"由 BE 缺陷
-            # 导致且已有 @xfail 用例覆盖——归因到 BE 缺口章节，不在此重复罗列，
-            # 避免"未验证"章节反复冒出已知缺陷项。
+            # curator GET 路由缺失），其"无二次样本"由 BE 缺陷导致且已有 @xfail
+            # 用例覆盖——归因到 BE 缺口章节，不在此重复罗列，避免"未验证"章节
+            # 反复冒出已知缺陷项。（admin 域已在审计入口过滤，不会落入此分支）
             gap_hit = next(
                 (g for g in _KNOWN_BE_GAPS if any(g["match"](e["url"]) for e in entries)),
                 None,
@@ -856,7 +872,7 @@ def _write_get_db_audit_report() -> str:
             lines.append(
                 f"- 另有 {len(be_attributed)} 个接口命中 BE 已知缺口"
                 f"（{'、'.join(gap_ids)}）：其'无二次读取样本'由后端缺陷导致"
-                f"（checkout 广告参数未归一化 / admin 域无 DB 埋点 / GET 路由缺失），"
+                f"（checkout 广告参数未归一化 / GET 路由缺失），"
                 f"已由对应 @xfail 用例覆盖并在下方'BE 已知缺口'章节说明，此处不重复罗列。"
             )
             lines.append("")
@@ -869,7 +885,7 @@ def _write_get_db_audit_report() -> str:
     # ---- BE 已知缺口：已确认的后端问题，每次运行强制展示，不放过 ----
     lines.append("## BE 已知缺口（已确认后端问题，需修复）")
     lines.append("")
-    lines.append("- 以下为测试确认的后端缺陷（缓存 key 未归一化 / GET 路由缺失 / DB 埋点未部署）。")
+    lines.append("- 以下为测试确认的后端缺陷（缓存 key 未归一化 / GET 路由缺失）。")
     lines.append("- 相关用例均以 @xfail(strict=False) 显式标注；BE 修复后对应用例自动 XPASS 提示。")
     lines.append("- 本表每次运行强制输出，即使缺口接口本次未触发也保留条目，防止缺陷被静默吞掉。")
     lines.append("")
@@ -902,7 +918,8 @@ def _write_get_db_audit_report() -> str:
     # 写接口读 DB 是期望行为，不判违规；此处用于暴露 promotion/coupon 读取实际发生在
     # 哪条接口——例如 PUT /cart 加购时 promotion service 自动读 coupon 计算折扣
     # （totalCouponDiscount 即其产物），该 DB 查询不在独立 GET 接口上。
-    write_entries = [e for e in REQUEST_LOG if e["method"] != "GET"]
+    # admin 域请求已在审计入口统一过滤，不参与本节统计。
+    write_entries = [e for e in audited_log if e["method"] != "GET"]
     write_grouped = OrderedDict()
     for e in write_entries:
         key = f"{e['method']} {_normalize_url(e['url'])}"
@@ -935,8 +952,10 @@ def _write_get_db_audit_report() -> str:
     lines.append("- 未验证接口数/章节仅在存在未验证接口时输出，无则不出现（避免'未验证：无'空内容）；")
     lines.append("- 非 2xx 响应的 DB 计数不可信，不参与违规判定；")
     lines.append("- 请求来源覆盖 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类；")
-    lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）。")
-    lines.append("- 'BE 已知缺口'章节为已确认后端缺陷（缓存 key 未归一化 / GET 路由缺失 / 埋点缺失），")
+    lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）；")
+    lines.append("- admin 域（admin.katana-api.1m.app）请求不参与审计：admin 后台不要求")
+    lines.append("  加缓存，仅 C 端接口需验证（June Teng 2026-08-27 确认）。")
+    lines.append("- 'BE 已知缺口'章节为已确认后端缺陷（缓存 key 未归一化 / GET 路由缺失），")
     lines.append("  由 _KNOWN_BE_GAPS 注册表驱动，每次运行强制输出，不以 xfail 静默。")
 
     with open(report_path, "w", encoding="utf-8") as f:

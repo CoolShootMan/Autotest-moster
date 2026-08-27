@@ -17,8 +17,8 @@ BE（release.katana-api.1m.app）调用的所有 GET API，验证"预热后连�
 
 语义约定：
 - GET 是读接口，预热后二次读取必须 DB=0（缓存命中）；二次读取仍 DB>0 判违规；
-- admin 域（release.admin.katana-api.1m.app）整体未部署 X-DB-Query-Count 埋点
-  （db=-1），admin 接口不参与 DB=0 断言，仅作状态断言并记录为 BE 埋点缺口；
+- admin 域不在审计范围（June Teng 2026-08-27：admin 不加缓存，仅 C 端接口需审计），
+  本文件不涉及 admin 接口断言；
 - GET /order/checkout 依赖浏览器会话（cookie），用 Playwright 真实走两遍
   checkout 页面：第一遍预热、第二遍验证二次加载的 GET DB 必须为 0；
 - KAT-11756 需求 3c checkout 分支：coupon 修改后结算页呈现的折扣必须立即

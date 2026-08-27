@@ -9,14 +9,15 @@ KAT-11756 Task 6: 未验证接口显式补"连续读两次"用例。
 覆盖接口（2026-08-21 / 2026-08-27 release 审计未验证项）：
 1. GET /feature-flag/user/{userId}              （storefront 审计仅 1 次请求）
 2. GET /feature-flag/user/{userId}/public       （storefront 审计仅 1 次请求）
-3. GET admin /promotions?searchTerm=...         （admin 匹配 promotionId 时仅 1 次）
+3. admin GET /promotions?searchTerm=...         （admin 域不在审计范围，本用例仅
+                                                 验证 admin 鉴权链路通畅以保障
+                                                 其他用例的 admin 调用可用）
 4. GET /posts/curator/{postId}/promotions       （storefront BE 仅注册 PATCH，
                                                  GET 路由 404 → @xfail BE 缺口）
 
 特殊处理：
-- admin 域（release.admin.katana-api.1m.app）整体未部署 X-DB-Query-Count 埋点
-  （db=-1），无法做 DB=0 断言。本用例对 admin 接口仅断言 HTTP 200，并记录
-  "admin 域无 DB 埋点"为 BE 埋点缺口（不判违规也不判通过）。
+- admin 域不在审计范围（June Teng 2026-08-27：admin 不加缓存，仅 C 端接口需审计），
+  本用例对 admin GET 仅断言 HTTP 200，确认 admin 鉴权链路可用即可。
 - /posts/curator/{postId}/promotions 当前 BE 仅注册 PATCH（全量替换），
   GET 路由返回 404 且无 X-DB-Query-Count 埋点。本用例对其连续读两次都
   断言 HTTP 200，@xfail(strict=False) 标注 BE 缺口；BE 补齐 GET 路由 +
@@ -110,10 +111,11 @@ class TestSecondReadUnverified:
 
     @pytest.mark.asyncio
     async def test_admin_promotions_second_read_status_ok(self, http_client):
-        """admin GET /promotions 连续读两次：断言 HTTP 200 + 记录无 DB 埋点缺口。
+        """admin GET /promotions 连续读两次：断言 HTTP 200，确认 admin 鉴权链路可用。
 
-        背景：admin 域未部署 X-DB-Query-Count 埋点（db=-1），无法做 DB=0 断言。
-        本用例验证接口可用性（200），并打印缺口说明，供 BE 补齐埋点后接入 DB 断言。
+        背景：admin 域不在审计范围（admin 不加缓存），本用例仅做可达性断言，
+        确认 admin 登录 → /promotions 鉴权链通畅，以保障其他依赖 admin
+        promotionId 匹配的用例（如 test_promotion）能稳定签发 token。
         """
         from urllib.parse import quote
 
@@ -123,6 +125,7 @@ class TestSecondReadUnverified:
         url = f"{ADMIN_URL}/promotions?searchTerm={search}&pageSize=1&pageNumber=1"
         headers = _admin_auth_headers()
 
+        # admin 不参与审计，不读 x-db-query-count；此处仅断言 HTTP 200
         db_seq = []
         for attempt in ("warmup", "verify"):
             resp = await http_client.get(url, headers=headers)
@@ -133,16 +136,9 @@ class TestSecondReadUnverified:
             )
             db_seq.append(get_db_queries(resp))
 
-        assert db_seq[0] == -1, (
-            f"admin 域出现 X-DB-Query-Count 埋点（db={db_seq[0]}）！\n"
-            f"  此前 admin 域整体无埋点（db=-1）；若现已部署，应改用 assert_zero_db_queries_async "
-            f"做预热后二次读取 DB=0 断言，并移除本特殊处理。"
-        )
         print(
             f"[second-read] admin GET /promotions: HTTP 200 OK；"
-            f"db={db_seq}（admin 域无 X-DB-Query-Count 埋点，DB 断言留待 BE 补齐）\n"
-            f"  BE 缺口：release.admin.katana-api.1m.app 未部署 DB 计数埋点，"
-            f"admin 侧 GET 无法纳入 0-DB 违规判定。"
+            f"db={db_seq}（admin 不参与审计，仅供链路可达性断言）"
         )
 
     @pytest.mark.asyncio
