@@ -825,7 +825,9 @@ def _write_get_db_audit_report() -> str:
     lines.append(f"## 结果总览")
     lines.append("")
     lines.append(f"- **违规接口数（预热后仍读 DB）：{len(violations)}**")
-    lines.append(f"- 未验证接口数（无实例二次读取样本）：{len(unverified)}")
+    if unverified:
+        # 无未验证接口时省略统计行，报告/Slack 均不出现"未验证：无"空内容
+        lines.append(f"- 未验证接口数（无实例二次读取样本）：{len(unverified)}")
     lines.append(f"- 通过接口数（预热后 DB=0）：{len(passed)}")
     lines.append(f"- **BE 已知缺口（已确认后端问题，见专章）：{len(_KNOWN_BE_GAPS)}**")
     lines.append("")
@@ -844,22 +846,25 @@ def _write_get_db_audit_report() -> str:
             lines.append(f"| {idx} | `{url}` | {seq_str} |")
         lines.append("")
 
-    lines.append("## 未验证接口（无实例二次读取样本，大流量前建议补二次读取验证）")
-    lines.append("")
-    if be_attributed:
-        gap_ids = sorted({gid for _, _, _, _, gid in be_attributed})
-        lines.append(
-            f"- 另有 {len(be_attributed)} 个接口命中 BE 已知缺口"
-            f"（{'、'.join(gap_ids)}）：其'无二次读取样本'由后端缺陷导致"
-            f"（checkout 广告参数未归一化 / admin 域无 DB 埋点 / GET 路由缺失），"
-            f"已由对应 @xfail 用例覆盖并在下方'BE 已知缺口'章节说明，此处不重复罗列。"
-        )
+    # 未验证接口：无则整章省略（含归因项说明——归因接口的证据已在 BE 已知缺口
+    # 章节强制展示），避免报告出现"未验证：无"之类的空内容。
+    if unverified:
+        lines.append("## 未验证接口（无实例二次读取样本，大流量前建议补二次读取验证）")
         lines.append("")
-    lines.append("| # | GET URL | 请求次数 | DB 分布 |")
-    lines.append("|---|---------|---------|---------|")
-    for idx, (url, count, dist, _) in enumerate(unverified, 1):
-        lines.append(f"| {idx} | `{url}` | {count} | {dist} |")
-    lines.append("")
+        if be_attributed:
+            gap_ids = sorted({gid for _, _, _, _, gid in be_attributed})
+            lines.append(
+                f"- 另有 {len(be_attributed)} 个接口命中 BE 已知缺口"
+                f"（{'、'.join(gap_ids)}）：其'无二次读取样本'由后端缺陷导致"
+                f"（checkout 广告参数未归一化 / admin 域无 DB 埋点 / GET 路由缺失），"
+                f"已由对应 @xfail 用例覆盖并在下方'BE 已知缺口'章节说明，此处不重复罗列。"
+            )
+            lines.append("")
+        lines.append("| # | GET URL | 请求次数 | DB 分布 |")
+        lines.append("|---|---------|---------|---------|")
+        for idx, (url, count, dist, _) in enumerate(unverified, 1):
+            lines.append(f"| {idx} | `{url}` | {count} | {dist} |")
+        lines.append("")
 
     # ---- BE 已知缺口：已确认的后端问题，每次运行强制展示，不放过 ----
     lines.append("## BE 已知缺口（已确认后端问题，需修复）")
@@ -927,6 +932,7 @@ def _write_get_db_audit_report() -> str:
     lines.append("- 同一归一化 GET URL（接口模式）的 2xx 请求序列中，第 1 次（冷启动/预热）DB>0 视为正常穿透；")
     lines.append("- 违规判定按实例（同一原始 URL）：第 2 次及以后仍 DB>0 → 缓存未命中，判定违规；")
     lines.append("- 接口模式内无任何实例有二次读取样本 → 标记'未验证'（不判通过/违规）；")
+    lines.append("- 未验证接口数/章节仅在存在未验证接口时输出，无则不出现（避免'未验证：无'空内容）；")
     lines.append("- 非 2xx 响应的 DB 计数不可信，不参与违规判定；")
     lines.append("- 请求来源覆盖 http_client / dynamic_ids 裸调用 / Playwright 页面响应三类；")
     lines.append("- DB=-1 表示 X-DB-Query-Count header 缺失（后端埋点未部署）。")
