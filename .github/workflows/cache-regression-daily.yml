@@ -82,13 +82,15 @@ jobs:
           path: test_case/performance testing/cache-regression/output
 
       # ===== Slack 通知（Incoming Webhook）=====
+      # 仅每天 10:00 的 scheduled run 发送 Slack 通知；
+      # workflow_dispatch 手动调试触发的 run 只在 Actions 页面看结果，不推送 Slack。
       # 需在仓库 Secrets 配置 SLACK_WEBHOOK_URL（Slack App -> Incoming Webhooks 生成）。
       # 未配置时以下步骤自动跳过，不影响测试本身。
       # 结果：成功只发摘要（含违规接口/BE 缺口数 + run 链接）；
       #       失败发失败用例列表 + run 链接，开发可直接点进详情定位。
       - name: Summarize results for Slack
         id: summarize
-        if: always()
+        if: ${{ always() && github.event_name == 'schedule' }}
         working-directory: test_case/performance testing/cache-regression
         shell: bash
         run: |
@@ -268,7 +270,7 @@ jobs:
           PY
 
       - name: Send Slack notification (success)
-        if: ${{ always() && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome == 'success' }}
+        if: ${{ always() && github.event_name == 'schedule' && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome == 'success' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         uses: slackapi/slack-github-action@v2
@@ -278,7 +280,7 @@ jobs:
           payload-file-path: test_case/performance testing/cache-regression/slack_payload_success.json
 
       - name: Send Slack notification (failure)
-        if: ${{ always() && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
+        if: ${{ always() && github.event_name == 'schedule' && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         uses: slackapi/slack-github-action@v2
