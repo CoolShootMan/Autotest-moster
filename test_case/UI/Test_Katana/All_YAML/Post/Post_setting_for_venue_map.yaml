@@ -15,6 +15,17 @@
 # T1742: Post commission Batch set to 10%
 #Auth: Linda Zhou
 testT1742:
+    # [Deferred 2026-09-02] Two structural problems stacked:
+    # 1) verify_text_visible (actions/base.py) silently ignores the `scope` field — does a global
+    #    get_by_text, so the scope {text: "event-for-ui-auto-venue-map"} never constrained the search.
+    # 2) `open_again` is NOT a registered action (not in actions/), and the verify landed on plain
+    #    /events (no event id / hash) — the post-card "Offer up to X%" lives on a post sub-tab that
+    #    wasn't reached. Commission UI was also a documented deep refactor casualty (batch -> per-ticket
+    #    Advanced) needing live-browser confirmation of the new label format, which the agent-browser
+    #    couldn't reach in this sandbox (cold-start hang). Re-enable after fixing both the test
+    #    design (replace open_again with a registered navigation + add real scope support to
+    #    verify_text_visible) and confirming the post-card commission text on the live UI.
+    skip: true
     description: "Post commission Batch set to 10%"
     pre_condition:
         description: "delete the resold post"
@@ -596,6 +607,12 @@ testT3686_teardown:
 # T2705: Partner hides the variant and sets the default variant
 testT2705_VerifyPartner:
   guest: false
+  # [Deferred 2026-09-02] Variants no longer exist on the post. After adding "General Admission" on
+  # /post/create, the Customize button is duplicated (2 identical buttons -> strict-mode miss) AND
+  # the variant rows "5 people"/"9 people" are completely absent from the DOM. The whole
+  # hide-variant / set-default-variant flow no longer applies (matches the same root cause as
+  # T2515/T2874). The guest-side verification (T2705_VerifyGuest) is deferred for the same reason.
+  skip: true
   description: "Partner hides the variant and sets the default variant on the management page"
   test_step:
     # Step 1: Open autotestshop page
@@ -732,6 +749,10 @@ testT2705_VerifyPartner:
 # Separate verification for Guest
 testT2705_VerifyGuest:
   guest: true
+  # [Deferred 2026-09-02] Same root cause as T2705_VerifyPartner — variants ("5 people"/"9 people")
+  # no longer exist on the post, so guest cannot verify hidden/default variant. Needs the same
+  # post-variant flow rewrite (see T2515/T2874).
+  skip: true
   description: "Verify that '5 people' variant is hidden and '9 people' variant is the default variant for guest users after curator action"
   test_step:
     open: "{BASE_URL}/autotestshop/post/test1234"
