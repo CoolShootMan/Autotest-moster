@@ -57,6 +57,7 @@ ACCOUNTS = [
     },
 ]
 
+SUBMIT_RETRIES = 3
 GOTO_RETRIES = 3
 GOTO_TIMEOUT = 20000
 BETWEEN_ACCOUNTS_DELAY = 3  # seconds; avoid hammering the login endpoint (rate-limit mitigation)
@@ -77,7 +78,7 @@ def login_and_save(playwright, account: dict):
     context = None
     page = None
     try:
-        browser = playwright.chromium.launch(headless=False)
+        browser = playwright.chromium.launch(headless=True)
         context = browser.new_context()
         page = context.new_page()
 
@@ -105,37 +106,56 @@ def login_and_save(playwright, account: dict):
 
         page.wait_for_timeout(2000)
 
-        # Click "Log in with password" button if it exists
-        try:
-            page.get_by_text("Log in with password").click(timeout=5000)
-            page.wait_for_timeout(1000)
-        except Exception:
-            pass
+        # NOTE (2026-08-31): the email input on the release login page is
+        # <input type="text" name="email" placeholder="Email"> -- it is NOT
+        # type="email", so any selector relying on input[type='email'] silently
+        # matches nothing and the form never validates. Always target by name.
+        page.locator("input[name='email']").first.fill(account["email"], timeout=15000)
+        page.locator("input[type='password']").first.fill(account["password"], timeout=15000)
 
-        # Fill Email
-        try:
-            page.get_by_role("textbox", name="Email").fill(account["email"])
-        except Exception:
+        # The form validates on blur (react-hook-form mode:'onBlur'). Without a
+        # blur the submit handler sees a stale isValid=false and the click is a
+        # silent no-op (zero network requests). Tab off the password field first.
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(800)
+
+        values = page.evaluate(
+            "() => Array.from(document.querySelectorAll('input'))"
+            ".map(i => i.name + '=' + (i.type === 'password' ? '***' : i.value))"
+        )
+        print(f"  [{name}] field values before submit: {values}")
+
+        # Retry the submit: the first click occasionally lands before React has
+        # committed the validated state, so re-blur and click again.
+        last_url = page.url
+        for attempt in range(1, SUBMIT_RETRIES + 1):
+            clicked = page.evaluate(
+                """() => {
+                const b = Array.from(document.querySelectorAll('button')).find(
+                    x => (x.innerText||'').trim() === 'Log in');
+                if (!b) return false;
+                b.setAttribute('data-login-submit','1');
+                return true;
+            }"""
+            )
+            if not clicked:
+                raise RuntimeError(f"[{name}] 'Log in' button not found")
+            page.locator("[data-login-submit='1']").click(timeout=10000)
             try:
-                page.locator(
-                    "input[type='email'], input[name='email'], input[placeholder*='email' i]"
-                ).fill(account["email"])
+                page.wait_for_url(lambda url: "/login" not in url, timeout=25000)
+                break
             except Exception:
-                page.screenshot(path=f"login_error_{name}.png")
-                raise RuntimeError(f"[{name}] Email input field not found")
-
-        # Fill Password
-        try:
-            page.get_by_role("textbox", name="Input your password").fill(account["password"])
-        except Exception:
-            try:
-                page.locator("input[type='password']").fill(account["password"])
-            except Exception:
-                page.screenshot(path=f"login_error_{name}.png")
-                raise RuntimeError(f"[{name}] Password input field not found")
-
-        page.get_by_role("button", name="Log in", exact=True).click()
-        page.wait_for_url(lambda url: "/login" not in url, timeout=60000)
+                print(f"  [{name}] submit attempt {attempt}/{SUBMIT_RETRIES} "
+                      f"stayed on {page.url}")
+                if attempt == SUBMIT_RETRIES:
+                    page.screenshot(path=f"login_error_{name}.png")
+                    raise RuntimeError(
+                        f"[{name}] still on login page after {SUBMIT_RETRIES} "
+                        f"submit attempts (fields: {values})"
+                    )
+                # re-blur to re-trigger validation, then try again
+                page.keyboard.press("Tab")
+                page.wait_for_timeout(1500)
 
         cookie_path = COOKIE_DIR / account["cookie_file"]
         context.storage_state(path=str(cookie_path))
