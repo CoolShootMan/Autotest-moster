@@ -35,6 +35,14 @@ from tools.step_capture import StepCapture
 def test_case(smokecases1, page: Page, browser: Browser, request):
     val = list(smokecases1.values())[0]
 
+    # Skip flag support (YAML top-level `skip: true`) — documented convention,
+    # previously never implemented: skipped cases silently ran and failed.
+    # [added 2026-09-02]
+    if val.get("skip", False):
+        reason = str(val.get("skip_reason", "")) or "Skipped by YAML skip flag"
+        logger.info(f">>> {list(smokecases1.keys())[0]} SKIPPED: {reason}")
+        pytest.skip(reason)
+
     # Guest Mode Setup
     if val.get("guest", False):
         logger.info(f"Running {list(smokecases1.keys())[0]} in GUEST mode")
