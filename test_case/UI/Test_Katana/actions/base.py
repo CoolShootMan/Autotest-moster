@@ -903,14 +903,52 @@ def verify_text_visible(page: Page, v: dict):
     timeout = v.get("timeout", 10000)
     not_visible = v.get("assert_not_visible", False)
 
+    # --- Optional scope container ---
+    # When `scope` is provided, the target text must live INSIDE the scope container
+    # instead of anywhere on the page. Supported scope shapes:
+    #   scope: { text: "container text" }    -> container found by accessible text
+    #   scope: { locator: "css=xpath" }      -> container found by selector
+    # When `scope` is absent, behavior is byte-identical to before this fix.
+    # (Fixes the silent global-search bug discovered 2026-09-02 in T1742.)
+    scope_locator = None
+    scope_label = None
+    scope_cfg = v.get("scope")
+    if scope_cfg:
+        try:
+            if scope_cfg.get("locator"):
+                scope_locator = page.locator(scope_cfg["locator"]).first
+                scope_label = scope_cfg["locator"]
+            elif scope_cfg.get("text"):
+                scope_locator = page.get_by_text(
+                    scope_cfg["text"], exact=scope_cfg.get("exact", False)
+                ).first
+                scope_label = scope_cfg["text"]
+            else:
+                raise AssertionError(
+                    f"verify: invalid scope {scope_cfg}; need 'text' or 'locator'"
+                )
+            scope_locator.wait_for(state="visible", timeout=timeout)
+        except AssertionError:
+            raise
+        except Exception:
+            page.screenshot(path=f"fail_scope_{str(scope_label)[:10]}.png")
+            raise AssertionError(f"Scope container '{scope_label}' not found.")
+
+    search_root = scope_locator if scope_locator is not None else page
+
     if not_visible:
         logger.info(f"Verifying text is NOT visible: {text or v.get('locator')}")
         if v.get("locator"):
-            el = page.locator(v["locator"]).first
+            # locator + scope: resolve the locator INSIDE the scope container.
+            el = (
+                scope_locator.locator(v["locator"]).first
+                if scope_locator is not None
+                else page.locator(v["locator"]).first
+            )
             if text:
                 el = el.get_by_text(text, exact=v.get("exact", False))
         elif text:
-            el = page.get_by_text(text, exact=v.get("exact", False)).first
+            el = search_root.get_by_text(text, exact=v.get("exact", False)).first
         else:
             raise AssertionError("verify: no text or locator provided")
         try:
@@ -924,7 +962,7 @@ def verify_text_visible(page: Page, v: dict):
 
     logger.info(f"Verifying text visibility: {text}")
     try:
-        page.get_by_text(text, exact=v.get("exact", False)).first.wait_for(state="visible", timeout=timeout)
+        search_root.get_by_text(text, exact=v.get("exact", False)).first.wait_for(state="visible", timeout=timeout)
         logger.info(f"Text '{text}' is visible.")
     except Exception as e:
         page.screenshot(path=f"fail_verify_{text[:10]}.png")

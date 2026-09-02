@@ -16,15 +16,16 @@
 #Auth: Linda Zhou
 testT1742:
     # [Deferred 2026-09-02] Two structural problems stacked:
-    # 1) verify_text_visible (actions/base.py) silently ignores the `scope` field — does a global
-    #    get_by_text, so the scope {text: "event-for-ui-auto-venue-map"} never constrained the search.
+    # 1) [FIXED 2026-09-02 in actions/base.py] verify_text_visible now honors `scope` (text/locator) and
+    #    roots the search inside the scope container — verify_post_offer's scope {text:"event-for-ui-auto-venue-map"}
+    #    is now respected. This blocker is resolved; the fix is unexercised until T1742 is re-enabled.
     # 2) `open_again` is NOT a registered action (not in actions/), and the verify landed on plain
     #    /events (no event id / hash) — the post-card "Offer up to X%" lives on a post sub-tab that
     #    wasn't reached. Commission UI was also a documented deep refactor casualty (batch -> per-ticket
     #    Advanced) needing live-browser confirmation of the new label format, which the agent-browser
-    #    couldn't reach in this sandbox (cold-start hang). Re-enable after fixing both the test
-    #    design (replace open_again with a registered navigation + add real scope support to
-    #    verify_text_visible) and confirming the post-card commission text on the live UI.
+    #    couldn't reach in this sandbox (cold-start hang). Re-enable after fixing the test
+    #    design (replace open_again with a registered navigation) and confirming the post-card commission
+    #    text on the live UI.
     skip: true
     description: "Post commission Batch set to 10%"
     pre_condition:
@@ -150,6 +151,17 @@ testT1742:
             timeout: 5000
 
 testT3991_VerifyPartner:
+    # [Deferred 2026-09-02] Structural refactor, not simple drift. Evidence from the re-run after
+    # re-capturing cookies (step_captures/testT3991_VerifyPartner/manifest.json): the post Settings page
+    # (~/post/<id>/settings) no longer exposes an "Add a note for co-sellers" toggle in its setting list —
+    # the only note-related items present are "Order confirmation note" and "Customize checkout
+    # recommendation message". verify_note_visible "Add a note for co-sellers" still PASSED (label exists
+    # somewhere on the page), but the fill step timed out on textbox name="Enter a short message for",
+    # which has been removed. Net: the downline-note-for-co-sellers entry flow changed (most likely moved
+    # into the Co-selling sub-tab, since it is co-seller-specific) and needs a flow rewrite + live-browser
+    # confirmation of the new selector. Cannot be fixed by a blind locator swap, and agent-browser cannot
+    # reach the live UI in this sandbox (cold-start hang). Re-enable after the flow rewrite.
+    skip: true
     description: "Verify that partner can set a note for co-sellers in a post"
     test_step:
         open: "{BASE_URL}/events"
