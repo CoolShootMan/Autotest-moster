@@ -1,0 +1,290 @@
+name: cache-regression-daily
+
+on:
+  schedule:
+    # 每天 10:00 北京时间（UTC 02:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  cache-regression:
+    name: cache-regression-daily-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install httpx pytest pytest-asyncio playwright python-dotenv
+          # SSR 用例依赖浏览器 console 抓取，需安装 chromium
+          playwright install --with-deps chromium
+
+      # 从仓库 Secrets 生成 .env.release，使依赖 curator/admin 凭据的
+      # "二次读验证"用例（feature-flag / checkout / buy-now / product-event-list）
+      # 在 CI 上真正执行，消除审计"未验证"盲区。
+      - name: Prepare .env from secrets
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          {
+            echo "ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}"
+            echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}"
+            echo "CURATOR_PASSWORD=${{ secrets.CURATOR_PASSWORD }}"
+            echo "PEAR_CLIENT_ID=${{ secrets.PEAR_CLIENT_ID }}"
+            echo "PEAR_CLIENT_SECRET=${{ secrets.PEAR_CLIENT_SECRET }}"
+          } > .env.release
+          echo "=== .env.release generated (keys only) ==="
+          sed 's/=.*/=<redacted>/' .env.release
+
+      - name: Run cache-regression tests
+        id: run_tests
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -v --tb=short --junitxml=pytest_report.xml 2>&1 | tee pytest_run.log
+
+      - name: Print audit report to job summary
+        if: always()
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          LATEST=$(find output -name 'get_api_db_audit_*.md' -type f 2>/dev/null | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "::warning::No GET API DB audit report found in output/"
+            exit 0
+          fi
+          echo "===== GET API DB AUDIT REPORT: ${LATEST} ====="
+          cat "${LATEST}"
+          echo "===== END OF AUDIT REPORT ====="
+          # 渲染到 Actions 页面 Summary（可直接在 run 页面查看，无需下载 artifact）
+          {
+            echo "# GET API DB Audit Report"
+            echo ""
+            echo "> 来源: ${LATEST}"
+            echo ""
+            cat "${LATEST}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test output (audit report)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cache-regression-output
+          path: test_case/performance testing/cache-regression/output
+
+      # ===== Slack 通知（Incoming Webhook）=====
+      # 仅每天 10:00 的 scheduled run 发送 Slack 通知；
+      # workflow_dispatch 手动调试触发的 run 只在 Actions 页面看结果，不推送 Slack。
+      # 需在仓库 Secrets 配置 SLACK_WEBHOOK_URL（Slack App -> Incoming Webhooks 生成）。
+      # 未配置时以下步骤自动跳过，不影响测试本身。
+      # 结果：成功只发摘要（含违规接口/BE 缺口数 + run 链接）；
+      #       失败发失败用例列表 + run 链接，开发可直接点进详情定位。
+      - name: Summarize results for Slack
+        id: summarize
+        if: ${{ always() && github.event_name == 'schedule' }}
+        working-directory: test_case/performance testing/cache-regression
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re, glob, json
+          import xml.etree.ElementTree as ET
+
+          # pytest 统计（junitxml 最稳，文本日志格式易变）
+          suite = None
+          if os.path.exists('pytest_report.xml'):
+              try:
+                  suite = ET.parse('pytest_report.xml').getroot()
+              except ET.ParseError:
+                  suite = None
+          if suite is not None:
+              tests    = int(suite.get('tests', '0'))
+              failures = int(suite.get('failures', '0'))
+              errors   = int(suite.get('errors', '0'))
+              skipped  = int(suite.get('skipped', '0'))
+              passed   = tests - failures - errors - skipped
+          else:
+              tests = failures = errors = skipped = passed = 0
+
+          # 失败用例（从 pytest 日志提取 FAILED 行，最多 10 条）
+          failed_cases = []
+          if os.path.exists('pytest_run.log'):
+              with open('pytest_run.log', encoding='utf-8', errors='replace') as f:
+                  for line in f:
+                      m = re.match(r'FAILED\s+(\S+)', line)
+                      if m:
+                          failed_cases.append(m.group(1))
+
+          # 审计报告亮点（违规接口数 / BE 已知缺口数 / 未验证数）
+          # 未验证：conftest 在无未验证接口时不再输出统计行与章节 → 解析不到视为 0
+          violations, be_gaps, unverified = '?', '?', '0'
+          reports = sorted(glob.glob('output/get_api_db_audit_*.md'), reverse=True)
+          report_name = os.path.basename(reports[0]) if reports else ''
+          violations_list = be_gaps_list = unverified_list = report_full = '无'
+          if reports:
+              with open(reports[0], encoding='utf-8', errors='replace') as f:
+                  text = f.read()
+              m = re.search(r'违规接口数（预热后仍读 DB）：(\d+)', text)
+              if m:
+                  violations = m.group(1)
+              m = re.search(r'未验证接口数（无实例二次读取样本）：(\d+)', text)
+              if m:
+                  unverified = m.group(1)
+              m = re.search(r'BE 已知缺口（已确认后端问题，见专章）：(\d+)', text)
+              if m:
+                  be_gaps = m.group(1)
+
+              def _rows(header):
+                  """提取某 markdown 章节的表格数据行（返回 cell 列表）。"""
+                  lines = text.splitlines()
+                  start = next((i for i, ln in enumerate(lines) if ln.startswith(header)), None)
+                  if start is None:
+                      return []
+                  rows = []
+                  for ln in lines[start + 1:]:
+                      if ln.startswith('## '):
+                          break
+                      if ln.startswith('|') and '---' not in ln:
+                          cells = [c.strip() for c in ln.strip().strip('|').split('|')]
+                          if cells and cells[0].isdigit():
+                              rows.append(cells)
+                  return rows
+
+              def _short(u, limit=90):
+                  u = u.replace('https://', '').replace('http://', '')
+                  return u if len(u) <= limit else u[:limit] + '…'
+
+              # 违规接口列表（URL 缩略 + 请求顺序→DB 摘要）
+              vrows = _rows('## 违规接口')
+              violations_list = '\n'.join(
+                  f'• `{_short(r[1])}`\n  {r[2][:180]}' for r in vrows[:8]
+              ) if vrows else '无'
+
+              # 未验证接口列表（章节无则列表为空）
+              urows = _rows('## 未验证接口')
+              unverified_list = '\n'.join(
+                  f'• `{_short(r[1])}`（{r[2]}次，{r[3]}）' for r in urows[:5]
+              ) if urows else '无'
+
+              # BE 已知缺口列表
+              grows = _rows('## BE 已知缺口')
+              be_gaps_list = '\n'.join(
+                  f'• `{r[1][:80]}`：{r[2][:110]}' for r in grows[:5]
+              ) if grows else '无'
+
+              # 完整报告（内嵌 Slack 消息，无 GitHub 权限的开发也可读全文）
+              report_full = text[:20000]
+
+          def _safe(s):
+              """转义为可安全写入 GITHUB_OUTPUT 的单行字符串（换行→\\n，引号→\\"）。"""
+              return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+
+          with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as f:
+              f.write(f"passed={passed}\n")
+              f.write(f"failed={failures}\n")
+              f.write(f"errors={errors}\n")
+              f.write(f"skipped={skipped}\n")
+              f.write(f"failed_cases={_safe(chr(10).join(failed_cases[:10]) if failed_cases else '无')}\n")
+              f.write(f"report_name={report_name or '未生成'}\n")
+              f.write(f"violations={violations}\n")
+              f.write(f"be_gaps={be_gaps}\n")
+              f.write(f"unverified={unverified}\n")
+              f.write(f"violations_list={_safe(violations_list)}\n")
+              f.write(f"unverified_list={_safe(unverified_list)}\n")
+              f.write(f"be_gaps_list={_safe(be_gaps_list)}\n")
+              f.write(f"report_full={_safe(report_full)}\n")
+
+          # ---- 构建 Slack payload（未验证接口为 0 时不出现任何"未验证"内容）----
+          ref_name  = os.environ.get('GITHUB_REF_NAME', '')
+          run_id    = os.environ.get('GITHUB_RUN_ID', '')
+          server    = os.environ.get('GITHUB_SERVER_URL', 'https://github.com')
+          repo      = os.environ.get('GITHUB_REPOSITORY', '')
+          run_url   = f"{server}/{repo}/actions/runs/{run_id}"
+          failed_txt = chr(10).join(failed_cases[:10]) if failed_cases else '无'
+
+          def _header(t):
+              return {"type": "header", "text": {"type": "plain_text", "text": t}}
+
+          def _mrk(t):
+              return {"type": "section", "text": {"type": "mrkdwn", "text": t}}
+
+          def _fields(items):
+              return {"type": "section", "fields": [{"type": "mrkdwn", "text": t} for t in items]}
+
+          def _button():
+              return {"type": "actions", "elements": [
+                  {"type": "button", "text": {"type": "plain_text", "text": "查看 Run 详情"}, "url": run_url}]}
+
+          full_text = (
+              "📋 *cache-regression-daily 完整审计报告*"
+              f"（分支 `{ref_name}`，run {run_id}）\n{report_full}"
+          )
+
+          def _build(success):
+              if success:
+                  blocks = [
+                      _header("✅ cache-regression-daily 通过"),
+                      _fields([
+                          f"*分支*: `{ref_name}`",
+                          f"*通过*: {passed}  *跳过*: {skipped}",
+                          f"*违规接口*: {violations}",
+                          f"*BE 缺口*: {be_gaps}",
+                      ]),
+                  ]
+                  v_text = "无，全部 GET 均 0 DB 缓存命中" if violations == '0' else violations_list
+                  blocks.append(_mrk(f"*违规接口（预热后仍读 DB）*:\n{v_text}"))
+              else:
+                  blocks = [
+                      _header("❌ cache-regression-daily 失败"),
+                      _fields([
+                          f"*分支*: `{ref_name}`",
+                          f"*失败*: {failures}  *错误*: {errors}",
+                          f"*违规接口*: {violations}",
+                          f"*BE 缺口*: {be_gaps}",
+                      ]),
+                      _mrk(f"*失败用例*:\n{failed_txt}"),
+                  ]
+                  v_text = "无" if violations == '0' else violations_list
+                  blocks.append(_mrk(f"*违规接口（预热后仍读 DB）*:\n{v_text}"))
+              # 未验证接口：仅当存在（>0）时展示，无则不写
+              if str(unverified) != '0':
+                  blocks.append(_mrk(f"*未验证接口*:\n{unverified_list}"))
+              blocks.append(_mrk(f"*BE 已知缺口（后端需修复）*:\n{be_gaps_list}"))
+              blocks.append(_mrk(
+                  f"*审计报告*: `{report_name}`\n完整报告已内嵌本条消息（展开查看），无需 GitHub 权限。"))
+              blocks.append(_button())
+              return {"text": full_text, "blocks": blocks}
+
+          for fname, ok in (("slack_payload_success.json", True), ("slack_payload_failure.json", False)):
+              with open(fname, "w", encoding="utf-8") as f:
+                  json.dump(_build(ok), f, ensure_ascii=False)
+              print(f"[summarize] wrote {fname}")
+          PY
+
+      - name: Send Slack notification (success)
+        if: ${{ always() && github.event_name == 'schedule' && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome == 'success' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: test_case/performance testing/cache-regression/slack_payload_success.json
+
+      - name: Send Slack notification (failure)
+        if: ${{ always() && github.event_name == 'schedule' && env.SLACK_WEBHOOK_URL != '' && steps.run_tests.outcome != 'success' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ env.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: test_case/performance testing/cache-regression/slack_payload_failure.json

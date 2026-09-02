@@ -60,8 +60,10 @@ These rules come from KAT-11830 and earlier tickets. Breaking any of them leads 
 
 1. **Pure-English content for ONES test cases.** The platform is English-only end to end (ONES UI/DB, Jira UI, GitHub, internal docs). Every name / desc / condition / step-desc / step-result written to ONES must be English. This includes module names, titles, preconditions, descriptions — no Chinese characters anywhere in `data/<TICKET>_test_cases.json` or anything that flows into ONES. (KAT-11830 incident, 2026-08-04: the AI generated Chinese cases despite knowing the system was English, and the user had to ask for a re-translate push — never again.) The Chinese草稿 file `data/KAT-11830_No7_test_cases_draft.md` is fine as an offline worksheet, but the JSON that hits ONES is English. The Chinese草稿 must NEVER become the JSON.
 2. **Jira backfill is part of the same flow — never leave it for the user.** Step 5 (`ones_create_plan_v3.py`) returns the plan UUID at the very end of its run. The agent must immediately capture that UUID and run `python tools/jira_backfill_test_link.py <TICKET> <PLAN_UUID>`. Returning to the user without backfilling is a defect. (KAT-11830 incident again: the plan finished in the background, the agent reported "计划正在后台创建" and stopped, then the user had to ask "为什么不回填 Jira?" — that is not what an automation skill does.)
-3. **Real ones_writer.py field contract, not the docs.** The SKILL.md example block below shows `title` / `description` / `precondition` / `expect` / `P0` / `P1`, but `ones_writer.create_case` reads **name** / **desc** / **condition** / **result** / **highest** / **high**. The doc example is outdated as of 2026-07. Use the real keys (this section) when generating JSON — copy a known-good case from `data/<existing_ticket>_test_cases.json` if unsure.
-4. **The 15-tool-call rule for skill housekeeping.** After any flow that touches ≥3 ONES calls (batch / link / verify / update), do the bookkeeping once at the end: delete temp probe scripts in `tools/_*.py`, save any new stable utility (e.g. `jira_backfill_test_link.py`) to `tools/`, append a bullet to today's memory file.
+3. **Real ones_writer.py field contract, not the docs.** `ones_writer.create_case` reads **name** / **desc** (or `description` — both accepted since 2026-08) / **condition** / **steps** (each step: `desc` + `result`) / **priority** (`"highest"` = P0, `"high"` = P1). The older doc keys `title` / `precondition` / `expect` / `P0` / `P1` are outdated — copy a known-good case from `data/<existing_ticket>_test_cases.json` if unsure. **KAT-11814 incident (2026-08-27): the JSON used `description` while the code read only `desc`; `case_data.get("desc", "")` silently produced an empty string and 31/31 cases landed in ONES with blank descriptions.** After Step 3, always verify `desc` is non-empty via GraphQL, not just that the create call returned success.
+4. **The 15-tool-call rule for skill housekeeping.** After any flow that touches ≥3 ONES calls (  batch / link / verify / update), do the bookkeeping once at the end: delete temp probe scripts in `tools/_*.py`, save any new stable utility (e.g. `jira_backfill_test_link.py`) to `tools/`, append a bullet to today's memory file.
+
+5. **E2E scenario-level granularity for test cases (KAT-11814 incident, 2026-08-28).** Write cases at the **business-scenario / end-to-end** level, not the component / interaction level. ONE case = ONE user journey or ONE business rule, with all the intermediate UX steps (open page, click Apply, "Thanks" popup, click "Got it", land back on post) captured as *steps inside that single case* — NOT as separate cases. Do NOT split "toggle ON saves" and "toggle OFF restores" into two cases, nor "click Apply shows popup" and "click Got it closes popup" into two cases. KAT-11814 was first drafted at 31 cases (component-level: "click X jumps to Y", "toggle on", "toggle off" each its own case); the user rejected this as fragmented and it was merged down to 12 E2E scenario-level cases. The reference baseline for this project's granularity is the T-Mobile quota subsystem (13 cases covering the entire subsystem at scenario level, e.g. "asynchronously reclassified", "global shared pool blocking at 10000 segments"). **If the draft exceeds ~15 cases for a single ticket, STOP and confirm granularity with the user via AskUserQuestion before creating anything in ONES** — do not assume the user wants fine-grained cases.
 
 ## Field & UUID Reference
 
@@ -120,7 +122,30 @@ Analyse the Jira description and Figma analysis and draft `data/<TICKET>_test_ca
 }
 ```
 
-(`title` / `description` / `precondition` / `expect` / `P0` / `P1` shown in earlier doc revisions are outdated — `create_case` will KeyError on them. P0 maps to `"highest"`, P1 maps to `"high"`.)
+  (`description` is also accepted as an alias for `desc` since the 2026-08 fix. The older doc keys `title` / `precondition` / `expect` / `P0` / `P1` are outdated — `create_case` will silently ignore them. P0 maps to `"highest"`, P1 maps to `"high"`.)
+
+#### Test Case Design Methodology — E2E scenario-level (MANDATORY)
+
+Write cases the way this project's QA engineers write them: **one case per real user journey or business rule**, with the granular UX interactions as *steps* inside the case, not separate cases. This is Pre-flight Rule 5 — read it first.
+
+**Do this (✅ E2E scenario-level):**
+- A config case covers the toggle + expiration options + email template together as one scenario: *"Organizer configures the approval framework (toggle ON, expiration 24/48/72h, email template) and it takes effect everywhere"*.
+- A single-apply case covers: post page CTA → click Apply → "Thanks for your submission!" popup → click "Got it" → returns to post page. All of it = ONE case, ~5 steps.
+- A mixed-cart case covers: checkout notices "These items require approval" → submit → non-approval items still checkout normally.
+
+**Do NOT do this (❌ component-level fragmentation — rejected on KAT-11814):**
+- "Verify toggle is OFF by default" as its own case AND "Verify toggling it ON saves" as its own case AND "Verify toggling it OFF restores" as its own case.
+- "Verify popup appears on Apply" as one case AND "Verify clicking Got it closes popup" as one case.
+- Any "click X → navigates to Y" expressed as an isolated case.
+
+**Granularity decision rule:**
+- If a sequence of actions is a single uninterrupted user flow, it is ONE case (with multiple steps).
+- Split ONLY when the paths are genuinely independent UX routes or independent edge cases — e.g. "unauthenticated user hits login gate", "organizer revokes approval before use", "duplicate application blocked". These deserve their own case because they are not part of the main happy path.
+- **Hard stop**: if the draft reaches ~15 cases for one ticket, pause and confirm the intended granularity with the user before writing to ONES. Do not silently produce 30+ component-level cases.
+
+**Reference files** (canonical examples of the target granularity — read them before drafting):
+- `data/KAT-11814_test_cases.json` — the merged 12-case E2E version (was 31 component-level before merge).
+- The T-Mobile quota suite (13 cases) — covers the entire subsystem at scenario level.
 
 **Module selection** (must be decided per ticket — never hardcode):
 - Run `python tools/ones_writer.py modules` to list all modules with their full paths.
@@ -160,6 +185,8 @@ When a ticket's feature is "copied" to a new flow (e.g. post preferences appear 
 ```
 "C:/Users/tester/.workbuddy/binaries/python/envs/default/Scripts/python.exe" tools/ones_writer.py batch data/<TICKET>_test_cases.json
 ```
+
+**Input format**: the file must be a **pure JSON array** of case objects — NOT a `{"cases": [...]}` wrapper. A wrapped object aborts with `must contain a JSON array of cases`.
 
 Creates cases under the target module. Results (with new UUIDs) are written to `data/ones_create_results.json`.
 
@@ -223,33 +250,13 @@ else:
 - If any case has 0 steps, re-run `update_case_steps` for those cases and verify again. Do not proceed to plan creation until all cases pass.
 - Save the verification result to `data/<TICKET>_step_verification.json` as proof.
 
-### Step 4 — Set case priorities (REST API)
+### Step 4 — Verify case priorities (they are set at creation)
 
-ONES `items/add` cannot set priority reliably. The GraphQL `updateTestcaseCase` mutation returns `"unknown field testcaseCase"` error (schema mismatch as of 2026-07). **Use the REST `cases/update` endpoint instead**, which accepts `priority` in the body:
+`ones_writer.py` sets the priority in the `items/add` body during Step 3, and **this works** — verified on KAT-11814 (19 P0 + 12 P1 all landed correctly). No separate priority-setting call is needed.
 
-```
-POST /project/api/project/team/{team}/testcase/library/{library_uuid}/cases/update
-```
-Body:
-```json
-{
-  "cases": [{
-    "uuid": "<CASE_UUID>",
-    "library_uuid": "<LIBRARY_UUID>",
-    "module_uuid": "<MODULE_UUID>",
-    "name": "<CASE_NAME>",
-    "assign": "<USER_UUID>",
-    "type": "7qLS7W5f",
-    "priority": "<PRIORITY_UUID>",
-    "condition": "",
-    "desc": "",
-    "steps": []
-  }]
-}
-```
-P0=`3g7bLpa1` (highest), P1=`VRXHXgbp` (high). Only use P0/P1 for this project.
+**Do NOT use the standalone REST `cases/update` endpoint with the old example body** (uuid + library_uuid + module_uuid + name + assign + type + priority + ...). As of 2026-08 that shape fails with `MissingParameter.TestCase.Module` even when `module_uuid` is present — the schema has changed. The only known-good way to invoke `cases/update` is the exact body `ones_writer.update_case_steps()` builds (uuid, name, condition, desc, library_uuid, module_uuid, assign, type, priority, steps — all fields present).
 
-**Note**: `steps: []` in this call is safe — it won't clear existing steps (the endpoint only updates fields that differ). But if you want to be safe, include the existing steps in the array.
+To verify priorities after batch creation, query GraphQL `testcaseCaseSteps` (same query as Step 3.5) with the `testcaseCase { uuid name desc condition }` projection plus a priority check via the REST `cases?uuid=X` listing, or spot-check 2–3 cases in the ONES UI. P0=`3g7bLpa1` (highest), P1=`VRXHXgbp` (high). Only use P0/P1 for this project.
 
 ### Step 5 — Create the test plan (UI automation)
 
@@ -315,6 +322,7 @@ After the full pipeline, do a quick visual check in ONES and Jira:
 - `updateTestcaseCase` requires `key: "testcase_case-<UUID>"` format, not bare `uuid`.
 - Use the managed Python venv (`C:\Users\tester\.workbuddy\binaries\python\envs\default\Scripts\python.exe`) for all scripts. If it lacks `playwright`, install via the managed runtime (see Prerequisites).
 - **Steps API**: `items/add` silently drops `steps`; use `cases/update` REST endpoint instead. `ones_writer.py` does this automatically; `ones_update_steps.py` can fix missing steps retroactively.
+- **Silent empty fields**: `case_data.get(key, "")` never raises on a missing/misspelled key — a wrong field name (e.g. `description` vs `desc` before the alias fix) produces empty strings in ONES with `success: true`. Always re-read created cases from ONES via GraphQL and assert `desc` / `condition` are non-empty, the same way Step 3.5 asserts steps exist.
 - **Point conservation**: Simple manual operations (editing a title, changing a dropdown) are cheaper for the user to do by hand than for the agent to automate. Reserve agent work for API calls, batch operations, and tasks requiring code.
 
 ## Cleanup

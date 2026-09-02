@@ -367,7 +367,7 @@ def update_case_steps(case_uuid: str, case_data: dict, env: dict, override_modul
                 "uuid": case_uuid,
                 "name": case_data["name"],
                 "condition": case_data.get("condition", ""),
-                "desc": case_data.get("desc", ""),
+                "desc": case_data.get("desc") or case_data.get("description", ""),
                 "library_uuid": library_uuid,
                 "module_uuid": module_uuid,
                 "assign": case_data.get("assign", user_id),
@@ -389,9 +389,9 @@ def create_case(case_data: dict, env: dict, override_module: str = None):
     """Create a single test case.
 
     case_data keys:
-        name (required), module_uuid, condition, desc, steps,
-        priority ("normal"|"high"|...), type ("functional"|...),
-        assign (optional, defaults to current user)
+        name (required), module_uuid, condition, desc (or description —
+        both accepted), steps, priority ("normal"|"high"|...),
+        type ("functional"|...), assign (optional, defaults to current user)
     """
     team = env.get("ONES_TEAM_UUID", "T7u1zXum")
     library_uuid = env.get("ONES_LIBRARY_UUID", "XcAFFViB")
@@ -428,7 +428,7 @@ def create_case(case_data: dict, env: dict, override_module: str = None):
             "testcase_library": library_uuid,
             "testcase_module": module_uuid,
             "condition": case_data.get("condition", ""),
-            "desc": case_data.get("desc", ""),
+            "desc": case_data.get("desc") or case_data.get("description", ""),
             "related_wiki_page": [],
         }
     }

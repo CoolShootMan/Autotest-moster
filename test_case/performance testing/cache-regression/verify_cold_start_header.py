@@ -12,10 +12,15 @@ import httpx
 import sys
 import time
 
-# ---- 端点定义 ----
-STORE_URL = "https://release.katana-api.1m.app/store-front/shop/resident?public=false"
-POST_URL = "https://release.katana-api.1m.app/posts/consumer/detail?vanityUrl=resident&urlAlias=11756"
-POST_B_URL = "https://release.katana-api.1m.app/posts/consumer/detail?vanityUrl=resident&urlAlias=ntxccrehh-charity-event"
+# ---- 统一参数中心（按 API_ENV 分环境读取 API_Parameter_Release.csv / API_Parameter_Prod.csv，api_params.py 读取） ----
+from api_params import BASE_URL, POST_B_PATH, POST_DETAIL_PATH, STORE_PATH, TIMEOUT
+# 消费者 GUEST JWT：guest-login 动态签发（dynamic_ids.guest_token），不落 .env
+from dynamic_ids import guest_token
+
+# ---- 端点定义（环境/路径全部来自对应环境的 API_Parameter_*.csv） ----
+STORE_URL = f"{BASE_URL}{STORE_PATH}"
+POST_URL = f"{BASE_URL}{POST_DETAIL_PATH}"
+POST_B_URL = f"{BASE_URL}{POST_B_PATH}"
 
 ENDPOINTS = [
     ("Storefront", STORE_URL),
@@ -23,20 +28,14 @@ ENDPOINTS = [
     ("Post B (ntxccrehh-charity-event)", POST_B_URL),
 ]
 
-# ---- 公共 Header ----
+# ---- 公共 Header（消费者 GUEST JWT 由 guest-login 动态签发，不落 .env、不硬编码） ----
 HEADERS = {
     "Content-Type": "application/json",
     "from": "client",
     "timezone": "Asia/Shanghai",
-    "Authorization": (
-        "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
-        "eyJ1c2VySWQiOiIwMDllZWYxOS03MjNkLTQwMmYtOGYxNC1jOWVjM2RiMDhiYTUiLCJlbnYiOiJyZWxlYXNlIiwidXNlclJvbGUiOiJDT05TVU1FUiIsInVzZXJUeXBlIjoiR1VFU1QiLCJpYXQiOjE3ODQ3NzQ0MTEsImV4cCI6MTgxNjMzMjAxMX0."
-        "_SO2j8P193ZLqSR6Wcm4IF7QzGKdkSnPoF8D3kY-L6w"
-    ),
+    "Authorization": f"Bearer {guest_token()}",
     "Pear-AutoTesting": "Lury",
 }
-
-TIMEOUT = 15
 
 
 def get_db_queries(resp: httpx.Response) -> str:

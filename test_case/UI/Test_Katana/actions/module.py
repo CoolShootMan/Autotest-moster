@@ -1176,7 +1176,8 @@ def click_container_button(page: Page, v: dict):
 
     # Find and click button, auto-detect XPath
     prefix = "xpath=" if button_selector.startswith("/") else ""
-    container.locator(f"{prefix}{button_selector}").nth(button_index).click(timeout=10000)
+    button_loc = container.locator(f"{prefix}{button_selector}")
+    button_loc.nth(button_index).click(timeout=10000)
     logger.info(f"✓ Clicked button '{button_selector}' at index {button_index}")
 
 

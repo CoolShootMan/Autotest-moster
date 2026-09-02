@@ -56,7 +56,7 @@ def start_autotest():
     
     # YAML file list to execute, comma-separated (paths relative to Test_Katana/All_YAML/)
     #yaml_files = "All_YAML/Post/Post_setting.yaml,All_YAML/Post/Post_content.yaml,All_YAML/Events/Scanner.yaml,All_YAML/Form/Storefront_form.yaml,All_YAML/Form/Storefront_product_with_form.yaml,All_YAML/Section/Section.yaml"
-    yaml_files = "All_YAML/Form/Storefront_form.yaml,All_YAML/Form/Storefront_product_with_form.yaml"
+    yaml_files = "All_YAML/Post/Post_setting_for_venue_map.yaml"
     pytest_args = [
         sys.executable,
         "-m",
@@ -117,6 +117,19 @@ def start_autotest():
     generate_cmd = [allure_bat, "generate", allure_data_dir, "-o", allure_report_dir, "-c"]
     logger.info(f"Running command: {' '.join(generate_cmd)}")
     subprocess.run(generate_cmd, check=True)
+
+    # ── 4.1 Patch v4 custom layout into the freshly generated report ──
+    # main.py already ran `allure generate` above, so we only inject styles/index
+    # (patch-only) into the SAME report dir that will be auto-opened below.
+    # This keeps the auto-opened report styled without re-running allure generate.
+    gen_script = os.path.join(BASE_DIR, 'tools', 'gen_report.py')
+    patch_cmd = [sys.executable, gen_script, "--patch-only", "--src", now_time]
+    logger.info(f"Patching v4 layout into report: {' '.join(patch_cmd)}")
+    patch_result = subprocess.run(patch_cmd, capture_output=True, text=True)
+    if patch_result.returncode != 0:
+        logger.error(f"gen_report patch failed: {patch_result.stderr}")
+    else:
+        logger.info(f"v4 layout patched: {patch_result.stdout.strip()}")
 
     # ---------------------------------------------------------
     # NEW: Analyze all failed cases from step captures

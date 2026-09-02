@@ -18,6 +18,8 @@ env/
 .vscode/
 *.swp
 *.swo
+# Pylance/Pyright 本地静态分析配置（含本机绝对路径，不提交）
+pyrightconfig.json
 
 # === Pytest ===
 .pytest_cache/
@@ -163,3 +165,4 @@ test_case/UI/Test_Katana/api/prefill_vars.json
 
 # === QA performance test debug
 test_case/output
+test_case/performance testing/cache-regression/output

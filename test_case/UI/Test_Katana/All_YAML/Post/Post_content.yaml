@@ -54,24 +54,15 @@ testT5442:
         sleep_step:                2000
 
         R_click_add_ticket:     { role: "button", name: "Add ticket" }
-        wait_for:               { role: "heading", name: "Add a ticket", timeout: 10000 }
+        wait_for:               { role: "heading", name: "Add a ticket", timeout: 5000 }
         fill_ticket_title:      { role: "textbox", name: "Product title", value: "new ticket related to T5442" }
         sleep_step:             1000
         fill_ticket_price:      { locator: 'input[name="variants.0.price"]', value: "10" }
         sleep_step:             1000
-        fill_ticket_quantity:   { placeholder: "Quantity", value: "20" }
+        fill_ticket_quantity:   { locator: 'input[name="variants.0.inventoryQuantity"]', value: "20" }
         sleep_step:             1000
 
-        R_click_add_media:      { role: "button", name: "Add Media" }
-        sleep_step:             2000
-        R_click_media_img:     { role: "img", index: 0 }
-        sleep_step:             2000
-        R_click_done_media:     { role: "button", name: "Done" }
-        sleep_step:             2000
-
         R_click_create_ticket:  { role: "button", name: "Create" }
-        sleep_step:             3000
-        R_click_save_visibility_ticket: { role: "button", name: "Save" }
         sleep_step:             3000
 
         # ----------------------------------------------------------------------
@@ -85,20 +76,10 @@ testT5442:
         sleep_step:             1000
         fill_merch_price:      { locator: 'input[name="variants.0.price"]', value: "10" }
         sleep_step:             1000
-        fill_merch_quantity:    { placeholder: "Quantity", value: "20" }
+        fill_merch_quantity:    { locator: 'input[name="variants.0.inventoryQuantity"]', value: "20" }
         sleep_step:             1000
-
-        R_click_add_media_merch: { role: "button", name: "Add Media" }
-        sleep_step:             2000
-        R_click_media_img_merch: { role: "img", index: 0 }
-        sleep_step:             2000
-        R_click_done_media_merch: { role: "button", name: "Done" }
-        sleep_step:             2000
-
         R_click_create_merch:   { role: "button", name: "Create" }
         sleep_step:             2000
-        R_click_save_visibility_merch: { role: "button", name: "Save" }
-        sleep_step:             3000
 
         # ----------------------------------------------------------------------
         # Step 3: Go to post → edit content → verify in All tickets/merch banner
@@ -150,13 +131,9 @@ VerifyGuest_testT5442:
     expect_result:
         description: "Guest sees only original 3 tickets; new ticket and merch are not visible"
 
-# ------------------------------------------------------------------------------
-# Test Case 3: Teardown — delete newly added ticket and merch
-# ------------------------------------------------------------------------------
-testTeardown_T5442:
-    description: "Delete newly added ticket and merch to restore original state"
-    test_step:
-        open: "{BASE_URL}/events"
+    teardown_step:
+        #description: "Delete newly added ticket and merch to restore original state"
+        open: { url: "{BASE_URL}/events", cookie_file: "test_case/UI/Test_Katana/cookie_{ENV}.json" }
         sleep_step: 5000
 
         R_click_my_event: { locator: "text=Auto-Test-post-setting", exact: true, index: 0 }
@@ -166,16 +143,16 @@ testTeardown_T5442:
 
         # ---- Delete new merch (only if exists) ----
         # verify_merch_exists: { text: "new merch related to T5442" }
-        R_click_merch_more:  { locator: '[data-testid="mui-stack"]:has(:text("new merch related to T5442")) >> [data-testid="MoreHorizIcon"]' }
-        sleep_step: 1000
+        R_click_tools_1: { role: "button", name: "Tools", index: 0 }
+        sleep_step: 800
         R_click_delete_merch: { locator: "text=Delete merch" }
         sleep_step: 1000
         R_click_confirm_merch: { role: 'button', name: 'Delete' }
         sleep_step: 3000
 
         # verify_ticket_exists: { text: "new ticket related to T5442"}
-        R_click_ticket_more: { locator: '[data-testid="mui-stack"]:has(:text("new ticket related to T5442")) >> [data-testid="MoreHorizIcon"]' }
-        sleep_step: 1000
+        R_click_tools_2: { role: "button", name: "Tools", index: 0 }
+        sleep_step: 800
         R_click_delete_ticket: { locator: "text=Delete ticket"}
         sleep_step: 1000
         R_click_confirm_ticket: { role: 'button', name: 'Delete' }
@@ -409,19 +386,19 @@ testT5443:
 
         # Step 3: Confirm Remove section
         R_click_remove_section: { role: "button", name: "Remove section" }
-        sleep_step: 2000
+        sleep_step: 1000
 
         # Step 4: Click Update (bottom of Edit post content dialog)
         R_click_update_rte: { role: "button", name: "Update" }
-        sleep_step: 2000
+        sleep_step: 1000
 
         # Step 5: Click Update confirmation ("Update This Post?" dialog)
         R_click_update_confirm: { role: "button", name: "Update" }
-        sleep_step: 2000
+        sleep_step: 1000
 
         # Step 6: Close the edit dialog
         R_click_close_dialog: { role: "button", name: "Close" }
-        sleep_step: 2000
+        sleep_step: 1000
 
         # ----------------------------------------------------------------------
         # Part B: Add a new ticket via Event tab
@@ -438,18 +415,6 @@ testT5443:
         fill_ticket_title_t5443: { role: "textbox", name: "Product title", value: "ticket 001" }
         sleep_step: 1000
 
-        # Step 10: Click Add Media
-        R_click_add_media_t5443: { role: "button", name: "Add Media" }
-        sleep_step: 2000
-
-        # Step 11: Select media image checkbox
-        R_click_media_checkbox: { test_id: "CheckBoxOutlineBlankOutlinedIcon" }
-        sleep_step: 1000
-
-        # Step 12: Click Done to confirm media selection
-        R_click_done_media_t5443: { role: "button", name: "Done" }
-        sleep_step: 2000
-
         # Step 13: Fill price field
         fill_price_t5443: { locator: 'input[name="variants.0.price"]', value: "100" }
         sleep_step: 1000
@@ -457,10 +422,6 @@ testT5443:
         # Step 14: Click "Create" button on the page (this triggers the Review ticket visibility popup)
         R_click_create_ticket: { role: "button", name: "Create" }
         sleep_step: 2000
-
-        # Step 15: Click "Save" on the "Review ticket visibility" popup dialog
-        R_click_save_visibility: { role: "button", name: "Save" }
-        sleep_step: 3000
 
         # ----------------------------------------------------------------------
         # Part C: Go back to Posts tab and verify ticket shows up in post
@@ -535,8 +496,8 @@ testT5443_VerifyGuest:
         sleep_step: 2000
 
         # Step 5: Open ticket 001 more menu and delete
-        R_click_ticket_more_td: { locator: '[data-testid="mui-stack"]:has(:text("ticket 001")) >> [data-testid="MoreHorizIcon"]' }
-        sleep_step: 1000
+        R_click_tools_1: { role: "button", name: "Tools", index: 0 }
+        sleep_step: 800
         R_click_delete_ticket_td: { locator: "text=Delete ticket" }
         sleep_step: 1000
         R_click_confirm_ticket_td: { role: 'button', name: 'Delete' }
@@ -710,7 +671,7 @@ testT5440:
     sleep_after_open: 2000
 
     # Click event "verify auto coupon apply"
-    R_click_event: { role: "cell", name: "verify auto coupon apply" }
+    R_click_event: { role: "cell", name: "verify-co-seller-auto-archive" }
     sleep_after_event: 2000
 
     # Step 2: Go to Posts tab and view post

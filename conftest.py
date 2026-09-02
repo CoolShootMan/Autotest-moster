@@ -250,3 +250,28 @@ def pytest_generate_tests(metafunc):
         
         if all_argvalues:
             metafunc.parametrize("smokecases1", all_argvalues, ids=all_ids)
+
+
+# ---------------------------------------------------------------------------
+# WorkBuddy safe-delete sandbox: override pytest-playwright's delete_output_dir
+#
+# pytest-playwright ships a session-scoped autouse fixture `delete_output_dir`
+# that runs `shutil.rmtree("test-results")` before any test executes. Under the
+# WorkBuddy sandbox, `shutil.rmtree` is patched to move files to the recycle bin;
+# with no recycle bin available it raises OSError, which is NOT caught by the
+# fixture's `except FileNotFoundError`, so the fixture errors during session
+# setup and every test is marked broken ("Test Execution") without ever running.
+#
+# Only override inside the sandbox (detected via sitecustomize._safe_shutil_rmtree);
+# IDE / plain-terminal runs keep the original cleanup behavior. Leftover
+# test-results artifacts are harmless.
+# See .workbuddy/memory/2026-08-14.md for the full root-cause analysis.
+# ---------------------------------------------------------------------------
+import sys as _sys
+
+_sitecustomize = _sys.modules.get("sitecustomize")
+if _sitecustomize is not None and getattr(_sitecustomize, "_safe_shutil_rmtree", None) is not None:
+    @pytest.fixture(scope="session", autouse=True)
+    def delete_output_dir(pytestconfig):
+        """no-op: skip test-results cleanup under WorkBuddy safe-delete sandbox."""
+        return None
